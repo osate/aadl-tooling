@@ -113,36 +113,48 @@ Linux packages install to:
 
 ## Publish a GitHub Release
 
+Releases are automated. Pushing an `osate-cli-v<version>` tag runs
+[`.github/workflows/release-osate-cli.yml`](../../.github/workflows/release-osate-cli.yml),
+which validates the tag against `<revision>` in `osate-cli/pom.xml`, runs the
+script below with `--nfpm`, verifies the artifact set against `SHA256SUMS`,
+creates the release, and updates the Homebrew tap. See
+[RELEASING.md](../../RELEASING.md).
+
+The rest of this section is the manual fallback.
+
 Build every artifact, requiring nFPM so the Linux `.deb` and `.rpm` packages are
-included:
+included. Without `--nfpm` a missing nFPM only warns, and four of the eight
+packages are silently dropped:
 
 ```sh
 osate-cli/packaging/scripts/build-release-artifacts.sh --nfpm
 ```
 
-Create the release for the tag and attach everything under `target/artifacts/`:
+Create the release for the tag and attach the artifacts. `VERSION` is an internal
+handoff to the formula generator, not a release asset:
 
 ```sh
-version=$(cat osate-cli/packaging/target/artifacts/VERSION)
-gh release create "v$version" \
+cd osate-cli/packaging/target/artifacts
+version=$(cat VERSION)
+gh release create "osate-cli-v$version" \
   --repo osate/aadl-tooling \
   --title "osate-cli $version" \
   --notes "osate-cli $version" \
-  osate-cli/packaging/target/artifacts/*
+  osate-cli-*.tar.gz osate-cli*.deb osate-cli*.rpm SHA256SUMS
 ```
 
 To add or replace an artifact on an existing release:
 
 ```sh
-gh release upload "v$version" \
+gh release upload "osate-cli-v$version" \
   --repo osate/aadl-tooling --clobber \
-  osate-cli/packaging/target/artifacts/*
+  osate-cli/packaging/target/artifacts/SHA256SUMS
 ```
 
 To verify a Linux package, download it from the release and install it directly:
 
 ```sh
-gh release download "v$version" --repo osate/aadl-tooling --pattern '*_amd64.deb'
+gh release download "osate-cli-v$version" --repo osate/aadl-tooling --pattern '*_amd64.deb'
 sudo apt-get install ./osate-cli_"$version"_amd64.deb
 osate-cli --help
 ```
@@ -196,7 +208,7 @@ the release's download prefix:
 ```sh
 version=$(cat osate-cli/packaging/target/artifacts/VERSION)
 osate-cli/packaging/scripts/generate-homebrew-formula.sh \
-  --base-url "https://github.com/osate/aadl-tooling/releases/download/v$version"
+  --base-url "https://github.com/osate/aadl-tooling/releases/download/osate-cli-v$version"
 ```
 
 The generated formula is written to:

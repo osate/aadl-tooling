@@ -61,12 +61,18 @@ Package the extension with:
 npm run package
 ```
 
-For a server plus extension build, first build OSATE and then run from the
-repository root:
+For a server plus extension build, first build OSATE, then run these from the
+repository root in this order:
 
 ```bash
-mvn verify -Dtycho.localArtifacts=ignore
+mvn -f aadl-language-server/pom.xml verify -Dtycho.localArtifacts=ignore
+mvn -f vscode-extension/pom.xml verify
 ```
+
+The two invocations are deliberate. `server/aadl/lib` is a symlink, so Maven has
+no dependency edge from this module to the server and a single reactor build with
+`-T` can package the VSIX before the plug-ins exist. This module fails at
+`validate` if they are missing.
 
 The Maven build installs pinned Node, runs `npm install`, compiles the
 extension, and packages `aadl2-*.vsix`. If the server changed, rebuild its p2

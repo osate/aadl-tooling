@@ -191,8 +191,11 @@ final class CommandHandlers {
 			ev.addProperty("type", 2);
 			var changes = new JsonArray();
 			changes.add(ev);
+			// Arm before notifying: the barrier must exist before the build can be
+			// scheduled, or its completion edge is lost. See LspClient.armBuildBarrier.
+			var barrier = lsp.armBuildBarrier();
 			lsp.sendNotification("workspace/didChangeWatchedFiles", LspClient.params("changes", changes));
-			lsp.waitUntilFinished();
+			lsp.awaitBuild(barrier);
 			var diags = new HashMap<String, List<JsonObject>>();
 			diags.put(uri, lsp.diagnosticsFor(uri));
 			return Response.ok(DiagnosticFormatter.formatAll(diags));
@@ -221,8 +224,11 @@ final class CommandHandlers {
 		if (changes.isEmpty()) {
 			return Response.ok(DiagnosticFormatter.formatAll(lsp.allDiagnostics()));
 		}
+		// Arm before notifying: the barrier must exist before the build can be
+		// scheduled, or its completion edge is lost. See LspClient.armBuildBarrier.
+		var barrier = lsp.armBuildBarrier();
 		lsp.sendNotification("workspace/didChangeWatchedFiles", LspClient.params("changes", changes));
-		lsp.waitUntilFinished();
+		lsp.awaitBuild(barrier);
 		return Response.ok(DiagnosticFormatter.formatAll(lsp.allDiagnostics()));
 	}
 
@@ -410,9 +416,12 @@ final class CommandHandlers {
 		added.add(WorkspaceServerMain.folderJson(root));
 		event.add("added", added);
 		event.add("removed", new JsonArray());
+		// Arm before notifying: the barrier must exist before the build can be
+		// scheduled, or its completion edge is lost. See LspClient.armBuildBarrier.
+		var barrier = lsp.armBuildBarrier();
 		lsp.sendNotification("workspace/didChangeWorkspaceFolders",
 				LspClient.params("event", event));
-		lsp.waitUntilFinished();
+		lsp.awaitBuild(barrier);
 		roots.add(root);
 		rewritePersistedRoots();
 		return Response.ok(DiagnosticFormatter.formatAll(lsp.allDiagnostics()));
@@ -442,9 +451,12 @@ final class CommandHandlers {
 		removed.add(WorkspaceServerMain.folderJson(match));
 		event.add("added", new JsonArray());
 		event.add("removed", removed);
+		// Arm before notifying: the barrier must exist before the build can be
+		// scheduled, or its completion edge is lost. See LspClient.armBuildBarrier.
+		var barrier = lsp.armBuildBarrier();
 		lsp.sendNotification("workspace/didChangeWorkspaceFolders",
 				LspClient.params("event", event));
-		lsp.waitUntilFinished();
+		lsp.awaitBuild(barrier);
 		roots.remove(match);
 		lsp.pruneDiagnosticsUnder(match);
 		rewritePersistedRoots();

@@ -212,13 +212,17 @@ java.feature.version=$java_feature_version
 EOF
 }
 
+# The notice files live beside the CLI sources, not at the repository root; the
+# root holds only LICENSE.md, which describes the per-directory split rather than
+# the terms this deliverable ships under.
 copy_notice_files() {
 	local payload_dir=$1
 	local notice
-	for notice in ACKNOWLEDGEMENTS CONTRIBUTORS COPYRIGHT; do
-		if [ -f "$repo_root/$notice" ]; then
-			cp "$repo_root/$notice" "$payload_dir/"
+	for notice in COPYRIGHT LICENSE.txt; do
+		if [ ! -f "$repo_root/osate-cli/$notice" ]; then
+			die "notice file not found: osate-cli/$notice"
 		fi
+		cp "$repo_root/osate-cli/$notice" "$payload_dir/"
 	done
 }
 

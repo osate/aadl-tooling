@@ -56,7 +56,15 @@ public final class LspClient {
 	private final InputStream fromServer;
 	private final AtomicLong idGen = new AtomicLong();
 	private final ConcurrentHashMap<String, CompletableFuture<JsonElement>> pending = new ConcurrentHashMap<>();
+	/** Silence long enough to conclude no build is publishing. */
+	private static final long QUIET_WINDOW_MILLIS = 1_000;
+
+	/** How long to look for that silence before giving up. */
+	private static final long QUIET_WAIT_MILLIS = 5_000;
+
 	private final Map<String, List<JsonObject>> diagnosticsByUri = new HashMap<>();
+	/** Guarded by {@code diagnosticsByUri}; see {@link #awaitQuiescence}. */
+	private long lastDiagnosticNanos = System.nanoTime();
 	private volatile boolean closed;
 
 	public LspClient(OutputStream toServer, InputStream fromServer) {
@@ -105,8 +113,40 @@ public final class LspClient {
 		writeFrame(toServer, msg.toString().getBytes(StandardCharsets.UTF_8));
 	}
 
-	public JsonElement waitUntilFinished() throws InterruptedException, ExecutionException, TimeoutException {
-		return sendRequest("aadlServer/waitUntilFinished", null).get(120, TimeUnit.SECONDS);
+	/**
+	 * Arm the build barrier, then send the notification that triggers the build, then
+	 * {@link #awaitBuild}. Arming first is what makes the sequence race-free.
+	 *
+	 * <p>{@code aadlServer/waitUntilFinished} resolves only on the language server's
+	 * <em>next</em> build completion. Sending the notification first leaves a window in
+	 * which the build can finish before the request registers its promise; the edge is
+	 * then gone for good and the caller blocks until its timeout expires, reporting a
+	 * spurious {@code TimeoutException} for an operation that actually succeeded.
+	 * Because LSP4J dispatches inbound messages serially, a request written before the
+	 * notification is handled before it, so the promise is always in place before the
+	 * build can be scheduled.
+	 */
+	public CompletableFuture<JsonElement> armBuildBarrier() {
+		return sendRequest("aadlServer/waitUntilFinished", null);
+	}
+
+	/**
+	 * Wait for the build armed by {@link #armBuildBarrier()}.
+	 *
+	 * <p>A timeout here no longer implies the build is stuck: the notification may
+	 * simply not have triggered one, in which case no edge is ever coming. Distinguish
+	 * the two by checking whether the server has gone quiet, and only report a timeout
+	 * when it is still publishing.
+	 */
+	public void awaitBuild(CompletableFuture<JsonElement> barrier)
+			throws InterruptedException, ExecutionException, TimeoutException {
+		try {
+			barrier.get(120, TimeUnit.SECONDS);
+		} catch (TimeoutException e) {
+			if (!awaitQuiescence(QUIET_WINDOW_MILLIS, QUIET_WAIT_MILLIS)) {
+				throw e;
+			}
+		}
 	}
 
 	/**
@@ -138,6 +178,40 @@ public final class LspClient {
 					return missing;
 				}
 				diagnosticsByUri.wait(Math.min(remainingMs, 250));
+			}
+		}
+	}
+
+	/**
+	 * Block until no {@code publishDiagnostics} has arrived for {@code quietMillis},
+	 * the connection closes, or {@code timeoutMillis} elapses. Returns whether the
+	 * quiet period was reached.
+	 *
+	 * <p>Unlike {@link #waitUntilFinished()} this tests state rather than waiting for
+	 * an edge, so it cannot miss one. {@code waitUntilFinished} resolves only on the
+	 * language server's <em>next</em> build completion, so a build that finishes
+	 * before the request registers its promise leaves the caller waiting for an edge
+	 * that has already gone by — it then blocks for its full timeout and reports a
+	 * spurious {@code TimeoutException}. Use this after operations where a build may
+	 * or may not follow, and where "nothing is happening" is a valid answer.
+	 */
+	public boolean awaitQuiescence(long quietMillis, long timeoutMillis) throws InterruptedException {
+		var deadline = System.nanoTime() + timeoutMillis * 1_000_000L;
+		synchronized (diagnosticsByUri) {
+			while (true) {
+				if (closed) {
+					return true;
+				}
+				long quietForMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - lastDiagnosticNanos);
+				if (quietForMs >= quietMillis) {
+					return true;
+				}
+				long remainingMs = TimeUnit.NANOSECONDS.toMillis(deadline - System.nanoTime());
+				if (remainingMs <= 0) {
+					return false;
+				}
+				// Wake when the quiet window would elapse, or sooner if diagnostics land.
+				diagnosticsByUri.wait(Math.max(1, Math.min(remainingMs, quietMillis - quietForMs)));
 			}
 		}
 	}
@@ -255,7 +329,8 @@ public final class LspClient {
 			}
 			synchronized (diagnosticsByUri) {
 				diagnosticsByUri.put(uri, list);
-				// Wake any thread blocked in awaitDiagnostics waiting for this URI to land.
+				lastDiagnosticNanos = System.nanoTime();
+				// Wake any thread blocked in awaitDiagnostics or awaitQuiescence.
 				diagnosticsByUri.notifyAll();
 			}
 		}

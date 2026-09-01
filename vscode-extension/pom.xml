@@ -40,10 +40,47 @@
 	<properties>
 		<frontend-maven-plugin.version>1.15.1</frontend-maven-plugin.version>
 		<node.version>v22.22.3</node.version>
+		<server.plugins.dir>${project.basedir}/../aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins</server.plugins.dir>
 	</properties>
 
 	<build>
 		<plugins>
+			<!--
+			The server plug-ins reach the VSIX through the server/aadl/lib symlink
+			rather than through Maven, so nothing makes the reactor build the
+			language server first. A parallel reactor (-T) starts this module as
+			soon as its parent is done and would package a VSIX with no server, or
+			a stale one from an earlier build. scripts/build-test-release therefore
+			builds the language server in a separate invocation; this check catches
+			the case where that ordering was not respected.
+			-->
+			<plugin>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>3.1.0</version>
+				<executions>
+					<execution>
+						<id>check-server-plugins</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<fail message="No AADL server plug-ins at ${server.plugins.dir}. Build the server first: mvn -f ../aadl-language-server/pom.xml verify -Dtycho.localArtifacts=ignore -DskipTests">
+									<condition>
+										<not>
+											<resourcecount when="greater" count="0">
+												<fileset dir="${project.basedir}/.." includes="aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins/*.jar"/>
+											</resourcecount>
+										</not>
+									</condition>
+								</fail>
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
 			<plugin>
 				<groupId>com.github.eirslett</groupId>
 				<artifactId>frontend-maven-plugin</artifactId>
