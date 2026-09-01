@@ -117,22 +117,49 @@ jobs:
       # -Plocal downgrades the jgit dirty-tree error to a warning and is required.
       # `install`, not `verify`: the language server is a separate mvn invocation
       # and resolves org.osate:osate2-platform from the Maven local repository.
+      #
+      # Retried because the OSATE target platform resolves against a dozen remote
+      # p2 sites, several of them third-party hosts we do not control (openjfx from
+      # bestsolution.at, py4j from osate-build, an Eclipse nightly). One slow host
+      # otherwise fails a build ten minutes after it started, which is how the
+      # third CI run died. Each retry is cheaper than the first attempt because the
+      # Maven cache keeps whatever already resolved. The retry is the mitigation
+      # that matters; the aether timeouts only widen the window before a stalled
+      # connection is abandoned.
       - name: Build OSATE
         if: steps.osate.outputs.cache-hit != 'true'
         run: |
-          xvfb-run -a mvn \
-            -B -T6 \
-            -f osate2/pom.xml \
-            -s osate2/releng/osate.releng/settings.xml \
-            -Plocal \
-            -Dpr.build=false \
-            -Dtycho.localArtifacts=ignore \
-            -Dsign=false \
-            -Dspotbugs=false \
-            -Dcodecoverage=false \
-            -Djavadoc=false \
-            -DfailIfNoTests=false \
-            clean install
+          build_osate() {
+            xvfb-run -a mvn \
+              -B -T6 \
+              -f osate2/pom.xml \
+              -s osate2/releng/osate.releng/settings.xml \
+              -Plocal \
+              -Dpr.build=false \
+              -Dtycho.localArtifacts=ignore \
+              -Dsign=false \
+              -Dspotbugs=false \
+              -Dcodecoverage=false \
+              -Djavadoc=false \
+              -DfailIfNoTests=false \
+              -Daether.connector.connectTimeout=60000 \
+              -Daether.connector.requestTimeout=180000 \
+              clean install
+          }
+
+          max=3
+          for attempt in $(seq 1 "$max"); do
+            if build_osate; then
+              echo "OSATE build succeeded on attempt $attempt."
+              exit 0
+            fi
+            if [ "$attempt" -lt "$max" ]; then
+              echo "::warning::OSATE build failed on attempt $attempt of $max; retrying."
+              sleep 30
+            fi
+          done
+          echo "OSATE build failed after $max attempts." >&2
+          exit 1
 
       # Immediately, so the rest of the job cannot cost us this result.
       - name: Save the OSATE build
