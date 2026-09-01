@@ -28,6 +28,12 @@ on:
       osate-sha:
         description: The osate2 gitlink commit the build used.
         value: ${{ jobs.build.outputs.osate-sha }}
+      osate-cache-key:
+        description: Cache key holding the OSATE build output, for pruning.
+        value: ${{ jobs.build.outputs.osate-cache-key }}
+      maven-cache-key:
+        description: Cache key holding the Maven dependencies, for pruning.
+        value: ${{ jobs.build.outputs.maven-cache-key }}
       cli-version:
         description: The osate-cli version from the build provenance.
         value: ${{ jobs.build.outputs.cli-version }}
@@ -53,6 +59,8 @@ jobs:
       OSATE_CLI_RUN_MANAGED_IT: ""
     outputs:
       osate-sha: ${{ steps.pin.outputs.sha }}
+      osate-cache-key: ${{ steps.keys.outputs.osate }}
+      maven-cache-key: ${{ steps.keys.outputs.maven }}
       cli-version: ${{ steps.versions.outputs.cli }}
       extension-version: ${{ steps.versions.outputs.extension }}
 
@@ -82,6 +90,17 @@ jobs:
           fi
           echo "sha=$sha" >> "$GITHUB_OUTPUT"
           echo "osate2 pinned at $sha"
+
+      # Exported so the prune job knows which entries to keep. hashFiles is only
+      # available in expressions, hence the detour through env.
+      - name: Export the cache keys
+        id: keys
+        env:
+          OSATE_KEY: osate-${{ runner.os }}-${{ steps.pin.outputs.sha }}-v1
+          MAVEN_KEY: maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('**/pom.xml') }}
+        run: |
+          echo "osate=$OSATE_KEY" >> "$GITHUB_OUTPUT"
+          echo "maven=$MAVEN_KEY" >> "$GITHUB_OUTPUT"
 
       # Third-party downloads, above all Tycho's resolution of the Eclipse target
       # platform. Safe to reuse partially, so prefix fallback is enabled. org/osate

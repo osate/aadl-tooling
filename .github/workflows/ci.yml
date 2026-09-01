@@ -47,12 +47,14 @@ jobs:
       test-extension: true
       upload-artifacts: true
 
-  # Cache keys are immutable, so a moved submodule pin leaves the previous OSATE
-  # entry behind. Delete it explicitly instead of waiting for the 7-day eviction
-  # or the 10 GB LRU. Only on main, because that is the ref whose caches every
-  # branch and pull request reads from.
-  prune-osate-cache:
-    name: Prune stale OSATE caches
+  # Cache keys are immutable, so every moved submodule pin leaves an OSATE entry
+  # behind and every pom change leaves a ~900 MB Maven entry behind. Against a
+  # 10 GB per-repository limit that would evict the entries we actually want, so
+  # delete superseded ones explicitly rather than waiting for the 7-day timeout
+  # or the LRU. Only on main, because that is the ref whose caches every branch
+  # and pull request reads from.
+  prune-caches:
+    name: Prune superseded caches
     needs: build
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -61,25 +63,39 @@ jobs:
       actions: write
     env:
       GH_TOKEN: ${{ github.token }}
-      KEEP: osate-Linux-${{ needs.build.outputs.osate-sha }}-v1
+      OSATE_KEEP: ${{ needs.build.outputs.osate-cache-key }}
+      MAVEN_KEEP: ${{ needs.build.outputs.maven-cache-key }}
     steps:
-      - name: Delete OSATE caches for other pins
+      - name: Delete superseded cache entries
         run: |
-          echo "Keeping $KEEP"
-          stale=$(gh cache list \
-            --repo "$GITHUB_REPOSITORY" \
-            --ref "$GITHUB_REF" \
-            --key osate-Linux- \
-            --limit 100 \
-            --json key,id,sizeInBytes \
-            --jq ".[] | select(.key != \"$KEEP\") | \"\(.id) \(.key) \(.sizeInBytes)\"")
+          prune() {
+            prefix=$1
+            keep=$2
+            echo "::group::$prefix (keeping $keep)"
+            stale=$(gh cache list \
+              --repo "$GITHUB_REPOSITORY" \
+              --ref "$GITHUB_REF" \
+              --key "$prefix" \
+              --limit 100 \
+              --json key,id,sizeInBytes \
+              --jq ".[] | select(.key != \"$keep\") | \"\(.id)\t\(.sizeInBytes)\t\(.key)\"")
 
-          if [ -z "$stale" ]; then
-            echo "No stale OSATE caches."
-            exit 0
-          fi
+            if [ -z "$stale" ]; then
+              echo "Nothing to prune."
+            else
+              printf '%s\n' "$stale" | while IFS="$(printf '\t')" read -r id size key; do
+                echo "Deleting $key ($size bytes)"
+                gh cache delete --repo "$GITHUB_REPOSITORY" "$id"
+              done
+            fi
+            echo "::endgroup::"
+          }
 
-          echo "$stale" | while read -r id key size; do
-            echo "Deleting $key ($size bytes)"
-            gh cache delete --repo "$GITHUB_REPOSITORY" "$id"
-          done
+          prune "osate-${{ runner.os }}-" "$OSATE_KEEP"
+          prune "maven-${{ runner.os }}-" "$MAVEN_KEEP"
+
+          echo "### Caches after pruning" >> "$GITHUB_STEP_SUMMARY"
+          gh cache list --repo "$GITHUB_REPOSITORY" --limit 30 \
+            --json key,sizeInBytes \
+            --jq '.[] | "- \(.sizeInBytes / 1048576 | floor) MB — \(.key)"' \
+            >> "$GITHUB_STEP_SUMMARY"
