@@ -8,12 +8,9 @@ name: Release osate-cli
 on:
   push:
     tags: ["osate-cli-v*"]
+  # Dispatching is inherently a dry run: every publish step is gated on the ref
+  # being a tag, so a manual run builds and packages but releases nothing.
   workflow_dispatch:
-    inputs:
-      dry-run:
-        description: Build and package without creating a release.
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -195,15 +192,26 @@ jobs:
         if: github.ref_type == 'tag' && env.TAP_TOKEN != ''
         run: |
           git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" /tmp/tap
-          mkdir -p /tmp/tap/Formula
-          cp osate-cli/packaging/target/recipes/homebrew/Formula/osate-cli.rb /tmp/tap/Formula/
           cd /tmp/tap
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet -- Formula/osate-cli.rb; then
+
+          # A tap that has never been written to has no commits, so HEAD is
+          # unborn and there is no branch to push. Adopt whatever branch the
+          # clone put us on, falling back to main.
+          branch=$(git symbolic-ref --quiet --short HEAD || echo main)
+          git checkout -B "$branch"
+
+          mkdir -p Formula
+          cp "$GITHUB_WORKSPACE/osate-cli/packaging/target/recipes/homebrew/Formula/osate-cli.rb" Formula/
+
+          # Stage before comparing. `git diff` ignores untracked files, so on the
+          # first publish — when the formula is not yet tracked — it would report
+          # no changes and this step would exit having pushed nothing.
+          git add Formula/osate-cli.rb
+          if git diff --cached --quiet; then
             echo "Formula unchanged."
             exit 0
           fi
-          git add Formula/osate-cli.rb
           git commit -m "osate-cli ${VERSION}"
-          git push
+          git push -u origin "$branch"

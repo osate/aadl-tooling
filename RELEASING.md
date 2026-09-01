@@ -69,6 +69,31 @@ workflows are usable before any of this is set up.
 
 Add them with `gh secret set VSCE_PAT --repo osate/aadl-tooling`.
 
+## Checking the credentials
+
+Every credential above is only exercised at the very end of a release, after a
+build that can take a quarter of an hour. Verify them first — it takes seconds
+and publishes nothing:
+
+```bash
+gh workflow run verify-credentials.yml --repo osate/aadl-tooling
+gh run watch --repo osate/aadl-tooling
+```
+
+It authenticates the Marketplace PAT against the `osate` publisher with
+`vsce verify-pat`, checks the Open VSX namespace, and confirms push access to the
+tap. The run summary says which credentials are valid, which are unset, and what
+to fix. It also runs weekly, so an expired token surfaces before a release
+rather than during one.
+
+To rehearse a release without publishing, dispatch the release workflow itself:
+every publish step is gated on the ref being a tag, so a manual run builds and
+packages but releases nothing.
+
+```bash
+gh workflow run release-osate-cli.yml --repo osate/aadl-tooling --ref main
+```
+
 ## Notes
 
 - The `osate2` submodule pin is part of every release. `build-provenance.properties`

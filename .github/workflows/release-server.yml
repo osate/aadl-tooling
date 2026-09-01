@@ -9,12 +9,9 @@ name: Release language server
 on:
   push:
     tags: ["ls-v*"]
+  # Dispatching is inherently a dry run: every publish step is gated on the ref
+  # being a tag, so a manual run builds and packages but releases nothing.
   workflow_dispatch:
-    inputs:
-      dry-run:
-        description: Build without creating a release.
-        type: boolean
-        default: true
 
 permissions:
   contents: read
