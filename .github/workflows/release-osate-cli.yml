@@ -70,6 +70,7 @@ jobs:
       contents: write
     env:
       MAVEN_OPTS: -Xmx4g
+      MAVEN_ARGS: -Dosate.cli.test.timeout.seconds=300
       VERSION: ${{ needs.verify-version.outputs.version }}
       # Job-level so the publish step's `if` can test it; a step cannot read its
       # own env block from its `if` expression.
@@ -80,13 +81,13 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
 
       - name: Cache Maven dependencies
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.m2/repository
@@ -99,7 +100,7 @@ jobs:
       # Populated by the build job, so this is expected to hit.
       - name: Restore the OSATE build
         id: osate
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             osate2/releng/org.osate.build.repository/target/repository
@@ -156,7 +157,7 @@ jobs:
           sha256sum -c SHA256SUMS
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: osate-cli-release-${{ env.VERSION }}
           if-no-files-found: error

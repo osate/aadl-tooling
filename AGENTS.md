@@ -93,6 +93,15 @@ owns the OSATE cache and delegates the rest to `scripts/build-test-release`;
   job on `main` deletes entries for superseded pins.
 - Keep build logic in `scripts/build-test-release`, not in YAML, so local and CI
   builds cannot diverge.
+- Action majors are pinned to the lowest one that declares `runs.using: node24`,
+  which is why the numbers differ: `checkout@v5`, `setup-java@v5`,
+  `setup-node@v5`, `cache@v5`, `upload-artifact@v6`, `download-artifact@v7`.
+  Older majors still declare `node20` and make the runner emit a deprecation
+  warning. Check `action.yml` in the action's repository before bumping.
+- The OSATE cache uses `cache/restore` plus an explicit `cache/save` immediately
+  after the build. The combined `cache` action saves in a post step that is
+  skipped when the job fails, which would throw away a successful OSATE build
+  because something later broke.
 
 ## Repository invariants
 

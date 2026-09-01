@@ -44,6 +44,10 @@ jobs:
     timeout-minutes: 150
     env:
       MAVEN_OPTS: -Xmx4g
+      # Applies to every mvn invocation the build script makes (Maven 3.9+).
+      # Hosted runners are roughly 3x slower than a workstation here, enough for
+      # CliEndToEndIT's rebuild-triggering commands to exceed the 120s default.
+      MAVEN_ARGS: -Dosate.cli.test.timeout.seconds=300
       # ManagedServerLaunchIT asserts a real launchd/systemd user session and
       # fails rather than skips on hosted runners. Keep it opt-in and off.
       OSATE_CLI_RUN_MANAGED_IT: ""
@@ -60,7 +64,7 @@ jobs:
         with:
           submodules: true
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "21"
@@ -83,8 +87,12 @@ jobs:
       # platform. Safe to reuse partially, so prefix fallback is enabled. org/osate
       # is excluded because those artifacts are produced by the build, not
       # downloaded, and are covered by the exact-keyed cache below.
-      - name: Cache Maven dependencies
-        uses: actions/cache@v4
+      # restore/save rather than the combined action: the combined action saves in
+      # a post step, which is skipped when the job fails, so a failure anywhere
+      # downstream would discard an OSATE build that had already succeeded.
+      - name: Restore Maven dependencies
+        id: maven
+        uses: actions/cache/restore@v5
         with:
           path: |
             ~/.m2/repository
@@ -99,7 +107,7 @@ jobs:
       # OSATE commit must never be silently reused.
       - name: Restore the OSATE build
         id: osate
-        uses: actions/cache@v4
+        uses: actions/cache/restore@v5
         with:
           path: |
             osate2/releng/org.osate.build.repository/target/repository
@@ -125,6 +133,16 @@ jobs:
             -Djavadoc=false \
             -DfailIfNoTests=false \
             clean install
+
+      # Immediately, so the rest of the job cannot cost us this result.
+      - name: Save the OSATE build
+        if: steps.osate.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            osate2/releng/org.osate.build.repository/target/repository
+            ~/.m2/repository/org/osate/osate2-platform
+          key: osate-${{ runner.os }}-${{ steps.pin.outputs.sha }}-v1
 
       - name: Report OSATE cache status
         run: |
@@ -165,7 +183,7 @@ jobs:
 
       - name: Upload the language-server p2 repository
         if: inputs.upload-artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: language-server-p2
           if-no-files-found: error
@@ -175,7 +193,7 @@ jobs:
 
       - name: Upload the VS Code extension
         if: inputs.upload-artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: vscode-extension
           if-no-files-found: error
@@ -183,7 +201,7 @@ jobs:
 
       - name: Upload the CLI distribution
         if: inputs.upload-artifacts && inputs.build-cli
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: osate-cli-dist
           if-no-files-found: error
@@ -191,7 +209,7 @@ jobs:
 
       - name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: test-reports
           if-no-files-found: ignore
@@ -199,3 +217,15 @@ jobs:
             aadl-language-server/plugins/**/target/surefire-reports/*.xml
             osate-cli/**/target/surefire-reports/*.xml
             osate-cli/**/target/failsafe-reports/*.xml
+
+      # Last, and on failure too: whatever was downloaded is worth keeping even
+      # when the build broke. Paired with the restore step above, which is
+      # restore-only precisely so this is not tied to job success.
+      - name: Save Maven dependencies
+        if: always() && steps.maven.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/org/osate
+          key: maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('**/pom.xml') }}

@@ -77,7 +77,7 @@ jobs:
     env:
       VERSION: ${{ needs.verify-version.outputs.version }}
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           name: language-server-p2
           path: dist

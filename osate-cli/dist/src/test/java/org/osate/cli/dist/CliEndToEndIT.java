@@ -60,6 +60,16 @@ class CliEndToEndIT {
 	private static final Pattern DIAG_LINE = Pattern.compile("^.+:\\d+:\\d+: (error|warning|info|hint): .+$");
 	private static final boolean IS_WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 
+	/**
+	 * Budget for a single CLI invocation and for reading one workspace-server
+	 * response. Commands that trigger a workspace rebuild are the slow ones, and
+	 * how slow depends heavily on the machine: the same suite that finishes in
+	 * about a minute on a developer workstation takes several minutes on a
+	 * two-core CI runner. Configurable so CI can be generous without making a
+	 * genuine hang take minutes to surface locally.
+	 */
+	private static final int TIMEOUT_SECONDS = Integer.getInteger("osate.cli.test.timeout.seconds", 120);
+
 	static boolean isLauncherAvailable() {
 		var dir = System.getProperty("osate.cli.bin");
 		if (dir == null) {
@@ -896,7 +906,7 @@ class CliEndToEndIT {
 	private Resp send(int port, String requestLine) throws IOException {
 		try (var sock = new Socket()) {
 			sock.connect(new InetSocketAddress("127.0.0.1", port), 5000);
-			sock.setSoTimeout((int) TimeUnit.SECONDS.toMillis(120));
+			sock.setSoTimeout((int) TimeUnit.SECONDS.toMillis(TIMEOUT_SECONDS));
 			try (var out = new PrintWriter(
 					new OutputStreamWriter(sock.getOutputStream(), StandardCharsets.UTF_8), false);
 					var in = new BufferedReader(
@@ -943,9 +953,9 @@ class CliEndToEndIT {
 		var proc = pb.start();
 		var stdoutFut = readAsync(proc.getInputStream());
 		var stderrFut = readAsync(proc.getErrorStream());
-		if (!proc.waitFor(120, TimeUnit.SECONDS)) {
+		if (!proc.waitFor(TIMEOUT_SECONDS, TimeUnit.SECONDS)) {
 			proc.destroyForcibly();
-			fail("CLI invocation did not terminate within 120s: " + cmd);
+			fail("CLI invocation did not terminate within " + TIMEOUT_SECONDS + "s: " + cmd);
 		}
 		try {
 			return new RunResult(proc.exitValue(), stdoutFut.get(), stderrFut.get());
