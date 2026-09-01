@@ -48,12 +48,18 @@ tests. Run it after a build rather than trusting the exit status, because the
 integration suites are `@EnabledIf`-gated and vanish silently when the dist
 layout is incomplete.
 
-When OSATE has already been built:
+When OSATE has already been built, build the language server before its
+consumers, each as its own invocation:
 
 ```bash
-mvn verify -Dtycho.localArtifacts=ignore
+mvn -f aadl-language-server/pom.xml verify -Dtycho.localArtifacts=ignore
+mvn -f vscode-extension/pom.xml verify
 mvn -f osate-cli/pom.xml verify
 ```
+
+Do not build the root reactor with `-T`: the extension reaches the server
+plug-ins through a symlink Maven cannot see, so a parallel reactor may package
+the VSIX before those plug-ins exist.
 
 Important outputs:
 
@@ -104,7 +110,11 @@ owns the OSATE cache and delegates the rest to `scripts/build-test-release`;
 - Advance `osate2/` only to an exact reviewed commit. If its parent version
   changes, update `aadl-language-server/pom.xml` in the same commit.
 - `vscode-extension/server/aadl/lib` is a symlink to the generated server p2
-  plug-ins. Packaging follows the symlink; do not add a JAR-copy step.
+  plug-ins. Packaging follows the symlink; do not add a JAR-copy step. Because
+  Maven cannot see that edge, the language server must be built in a separate,
+  earlier invocation. `vscode-extension/pom.xml` fails at `validate` when the
+  plug-ins are missing, which is the only thing standing between a reordered
+  build and a VSIX that silently ships no server or a stale one.
 - Keep the plug-in exclusion lists in `osate-cli/dist/pom.xml` and
   `vscode-extension/.vscodeignore` synchronized.
 - The CLI workspace server loads language-server plug-ins from sibling JARs

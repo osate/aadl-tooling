@@ -148,11 +148,22 @@ else
 		clean install
 fi
 
-echo "Building language tooling"
+echo "Building language server"
+
+# Two invocations, not one root-reactor build: the extension consumes the server
+# plug-ins through the server/aadl/lib symlink, which Maven cannot see, so a
+# parallel reactor is free to package the VSIX before those plug-ins exist.
+mvn \
+	-T6 \
+	-f "${repo_root}/aadl-language-server/pom.xml" \
+	-Dtycho.localArtifacts=ignore \
+	clean verify
+
+echo "Building VS Code extension"
 
 mvn \
 	-T6 \
-	-f "${repo_root}/pom.xml" \
+	-f "${repo_root}/vscode-extension/pom.xml" \
 	-Dtycho.localArtifacts=ignore \
 	clean verify
 
