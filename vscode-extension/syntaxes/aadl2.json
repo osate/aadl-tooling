@@ -1,0 +1,144 @@
+{
+  "scopeName": "source.aadl2",
+  "name": "AADL",
+  "fileTypes": ["aadl"],
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#annex" },
+    { "include": "#keyword" },
+    { "include": "#category" },
+    { "include": "#feature-keyword" },
+    { "include": "#section" },
+    { "include": "#operator" },
+    { "include": "#property-ref" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "--.*$",
+      "name": "comment.line.double-dash.aadl"
+    },
+    "string": {
+      "begin": "\"",
+      "end": "\"",
+      "name": "string.quoted.double.aadl"
+    },
+    "number": {
+      "patterns": [
+        {
+          "match": "\\b[0-9]+#[0-9a-fA-F_]+#\\b",
+          "name": "constant.numeric.based.aadl"
+        },
+        {
+          "match": "\\b[0-9]+\\.[0-9]+([eE][+-]?[0-9]+)?\\b",
+          "name": "constant.numeric.float.aadl"
+        },
+        {
+          "match": "\\b[0-9]+\\b",
+          "name": "constant.numeric.integer.aadl"
+        }
+      ]
+    },
+    "annex": {
+      "patterns": [
+        {
+          "begin": "(?i:(\\bannex\\b)(\\s+)(emv2)(\\s*)(\\{\\*\\*))",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.section.aadl" },
+            "3": { "name": "entity.name.language.annex.aadl" },
+            "5": { "name": "punctuation.definition.annex.begin.aadl" }
+          },
+          "end": "\\*\\*\\}",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.annex.end.aadl" }
+          },
+          "name": "meta.annex.emv2.aadl",
+          "contentName": "meta.embedded.block.emv2",
+          "patterns": [
+            { "include": "source.aadl2.emv2" }
+          ]
+        },
+        {
+          "begin": "(?i:(\\bannex\\b)(\\s+)(behavior_specification)(\\s*)(\\{\\*\\*))",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.section.aadl" },
+            "3": { "name": "entity.name.language.annex.aadl" },
+            "5": { "name": "punctuation.definition.annex.begin.aadl" }
+          },
+          "end": "\\*\\*\\}",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.annex.end.aadl" }
+          },
+          "name": "meta.annex.behavior.aadl",
+          "contentName": "meta.embedded.block.behavior",
+          "patterns": [
+            { "include": "source.aadl2.behavior" }
+          ]
+        },
+        {
+          "begin": "(?i:(\\bannex\\b)(\\s+)([a-z][a-z0-9_]*)(\\s*)(\\{\\*\\*))",
+          "beginCaptures": {
+            "1": { "name": "keyword.other.section.aadl" },
+            "3": { "name": "entity.name.language.annex.aadl" },
+            "5": { "name": "punctuation.definition.annex.begin.aadl" }
+          },
+          "end": "\\*\\*\\}",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.annex.end.aadl" }
+          },
+          "name": "meta.annex.unknown.aadl",
+          "contentName": "meta.embedded.block.unknown.aadl"
+        }
+      ]
+    },
+    "keyword": {
+      "match": "\\b(package|public|private|with|end|extends|implementation|type|is|none|all|self|applies\\s+to|renames|prototypes|calls|in|out|inout|initial|mode|transition|compute|complete|final|all|not|and|or|true|false|aadlboolean|aadlinteger|aadlreal|aadlstring|enumeration|units|range|of|record|list|reference|classifier|inherit|constant|delta|access|provides|requires|inverse|event|port|parameter|group|bus|virtual|feature|flow|source|sink|path|binding|set|property)\\b",
+      "name": "keyword.control.aadl"
+    },
+    "category": {
+      "match": "\\b(system|process|thread|thread\\s+group|processor|memory|device|data|subprogram|subprogram\\s+group|abstract)\\b",
+      "name": "entity.name.type.category.aadl"
+    },
+    "feature-keyword": {
+      "match": "\\b(data\\s+port|event\\s+port|event\\s+data\\s+port|bus\\s+access|data\\s+access|subprogram\\s+access|subprogram\\s+group\\s+access|feature\\s+group)\\b",
+      "name": "storage.type.feature.aadl"
+    },
+    "section": {
+      "match": "\\b(features|subcomponents|connections|properties|flows|modes|annex)\\b",
+      "name": "keyword.other.section.aadl"
+    },
+    "operator": {
+      "patterns": [
+        {
+          "match": "=>",
+          "name": "keyword.operator.property-assign.aadl"
+        },
+        {
+          "match": "<->|->",
+          "name": "keyword.operator.connection.aadl"
+        },
+        {
+          "match": "::",
+          "name": "punctuation.separator.namespace.aadl"
+        },
+        {
+          "match": "\\.\\.\\.",
+          "name": "keyword.operator.range.aadl"
+        }
+      ]
+    },
+    "property-ref": {
+      "match": "\\b([A-Z][a-zA-Z0-9_]*)::([A-Z][a-zA-Z0-9_]*)\\b",
+      "captures": {
+        "1": { "name": "entity.name.namespace.property-set.aadl" },
+        "2": { "name": "variable.other.property.aadl" }
+      }
+    },
+    "identifier": {
+      "match": "\\b[a-zA-Z_][a-zA-Z0-9_]*\\b",
+      "name": "variable.other.aadl"
+    }
+  }
+}

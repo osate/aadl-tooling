@@ -1,0 +1,226 @@
+{
+	"name": "aadl2",
+	"displayName": "AADL2",
+	"publisher": "osate",
+	"description": "Support for AADL2 modeling",
+	"version": "0.0.2",
+	"license": "LicenseRef-BSD-SEI",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/osate/aadl-tooling.git"
+	},
+	"homepage": "https://github.com/osate/aadl-tooling",
+	"bugs": {
+		"url": "https://github.com/osate/aadl-tooling/issues"
+	},
+	"engines": {
+		"vscode": "^1.110.0"
+	},
+	"categories": [
+		"Programming Languages",
+		"Linters",
+		"Other"
+	],
+	"keywords": [
+		"aadl",
+		"osate",
+		"lsp",
+		"architecture",
+		"mbse"
+	],
+	"activationEvents": [
+		"onLanguage:aadl2"
+	],
+	"extensionDependencies": [
+		"redhat.java"
+	],
+	"main": "./out/extension.js",
+	"contributes": {
+		"languages": [
+			{
+				"id": "aadl2",
+				"aliases": [
+					"aadl2"
+				],
+				"extensions": [
+					".aadl"
+				]
+			},
+			{
+				"id": "aadl2-emv2",
+				"aliases": [
+					"AADL Error Model Annex (EMV2)"
+				]
+			},
+			{
+				"id": "aadl2-behavior",
+				"aliases": [
+					"AADL Behavior Annex"
+				]
+			}
+		],
+		"grammars": [
+			{
+				"language": "aadl2",
+				"scopeName": "source.aadl2",
+				"path": "./syntaxes/aadl2.json",
+				"embeddedLanguages": {
+					"meta.embedded.block.emv2": "aadl2-emv2",
+					"meta.embedded.block.behavior": "aadl2-behavior"
+				}
+			},
+			{
+				"language": "aadl2-emv2",
+				"scopeName": "source.aadl2.emv2",
+				"path": "./syntaxes/emv2.json"
+			},
+			{
+				"language": "aadl2-behavior",
+				"scopeName": "source.aadl2.behavior",
+				"path": "./syntaxes/behavior.json"
+			}
+		],
+		"commands": [
+			{
+				"command": "aadl2.instantiate",
+				"title": "AADL2: Instantiate"
+			},
+			{
+				"command": "aadl2.analyze.latency",
+				"title": "AADL2: Run latency analysis on instance model"
+			},
+			{
+				"command": "aadl2.analyze.busLoad",
+				"title": "AADL2: Run bus load analysis on instance model"
+			},
+			{
+				"command": "aadl2.analyze.reachability",
+				"title": "AADL2: Run mode reachability analysis on instance model"
+			},
+			{
+				"command": "aadl2.restart",
+				"title": "AADL2: Restart Language Server"
+			}
+		],
+		"menus": {
+			"explorer/context": [
+				{
+					"command": "aadl2.analyze.latency",
+					"when": "resourceExtname == .aaxl2"
+				},
+				{
+					"command": "aadl2.analyze.busLoad",
+					"when": "resourceExtname == .aaxl2"
+				},
+				{
+					"command": "aadl2.analyze.reachability",
+					"when": "resourceExtname == .aaxl2"
+				}
+			]
+		},
+		"configuration": {
+			"type": "object",
+			"title": "AADL LSP Configuration",
+			"properties": {
+				"aadl2Server.maxNumberOfProblems": {
+					"scope": "resource",
+					"type": "number",
+					"default": 100,
+					"description": "Controls the maximum number of problems produced by the server."
+				},
+				"aadl2Server.trace.server": {
+					"scope": "window",
+					"type": "string",
+					"enum": [
+						"off",
+						"messages",
+						"verbose"
+					],
+					"default": "off",
+					"description": "Traces the communication between VS Code and the language server."
+				},
+				"aadl2Server.latency.asynchronousSystem": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Flow latency: assume an asynchronous system (otherwise synchronous)."
+				},
+				"aadl2Server.latency.majorFrameDelay": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Flow latency: use major-frame delay for partition output (otherwise partition-end delay)."
+				},
+				"aadl2Server.latency.worstCaseDeadline": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Flow latency: use worst-case processing time based on deadline (otherwise best-case based on compute execution time)."
+				},
+				"aadl2Server.latency.bestCaseEmptyQueue": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Flow latency: assume best-case empty queue (otherwise worst-case full queue)."
+				},
+				"aadl2Server.latency.disableQueuingLatency": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": false,
+					"description": "Flow latency: disable queuing latency contribution from the analysis."
+				},
+				"aadl2Server.reachability.generateDot": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Mode reachability: generate a DOT report file."
+				},
+				"aadl2Server.reachability.generateHtml": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Mode reachability: generate an HTML report file."
+				},
+				"aadl2Server.reachability.generateSmv": {
+					"scope": "resource",
+					"type": "boolean",
+					"default": true,
+					"description": "Mode reachability: generate an SMV report file."
+				}
+			}
+		}
+	},
+	"scripts": {
+		"vscode:prepublish": "npm run package-bundle",
+		"compile": "node esbuild.js",
+		"watch": "node esbuild.js --watch",
+		"package-bundle": "node esbuild.js --production",
+		"package": "npm run package-bundle && vsce package --no-dependencies --follow-symlinks",
+		"check-types": "tsc -b ./ --noEmit",
+		"compile-tests": "tsc -p tsconfig.test.json",
+		"test:unit": "npm run compile-tests && mocha --ui tdd \"out/test/unit/**/*.test.js\"",
+		"test:integration": "npm run compile-tests && node out/test/runIntegrationTests.js",
+		"test": "npm run test:unit && npm run test:integration",
+		"lint": "eslint src --ext ts"
+	},
+	"dependencies": {
+		"vscode-languageclient": "^9.0.1"
+	},
+	"devDependencies": {
+		"@types/glob": "^8.1.0",
+		"@types/mocha": "^10.0.10",
+		"@types/node": "22.x",
+		"@types/vscode": "^1.110.0",
+		"@typescript-eslint/eslint-plugin": "^8.58.0",
+		"@typescript-eslint/parser": "^8.58.0",
+		"@vscode/test-electron": "^2.5.2",
+		"@vscode/vsce": "^3.2.0",
+		"esbuild": "^0.25.0",
+		"eslint": "^10.1.0",
+		"glob": "^13.0.6",
+		"mocha": "^11.7.6",
+		"typescript": "^6.0.2",
+		"vscode-oniguruma": "^1.7.0",
+		"vscode-textmate": "^9.3.2"
+	}
+}

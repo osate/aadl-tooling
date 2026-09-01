@@ -1,0 +1,7 @@
+vscode-extension/org.osate.aadl.ls.RunAadl2Server-debug.log
+target/
+osate-cli/packaging/target/
+# Written by flatten-maven-plugin, which resolves ${revision} in the osate-cli poms
+.flattened-pom.xml
+.claude/settings.local.json
+.DS_Store

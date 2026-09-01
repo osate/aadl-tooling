@@ -1,0 +1,3 @@
+[submodule "osate2"]
+	path = osate2
+	url = https://github.com/osate/osate2.git

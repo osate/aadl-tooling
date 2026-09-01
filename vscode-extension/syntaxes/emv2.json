@@ -1,0 +1,129 @@
+{
+  "scopeName": "source.aadl2.emv2",
+  "name": "AADL Error Model Annex (EMV2)",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#number" },
+    { "include": "#transition-operator" },
+    { "include": "#assignment-operator" },
+    { "include": "#namespace-separator" },
+    { "include": "#logical-keyword" },
+    { "include": "#constant" },
+    { "include": "#section-keyword" },
+    { "include": "#keyword" },
+    { "include": "#declaration" },
+    { "include": "#namespace" },
+    { "include": "#operator" },
+    { "include": "#punctuation" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "--.*$",
+      "name": "comment.line.double-dash.emv2"
+    },
+    "string": {
+      "patterns": [
+        {
+          "begin": "\"",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.emv2" }
+          },
+          "end": "\"",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.emv2" }
+          },
+          "name": "string.quoted.double.emv2",
+          "patterns": [
+            {
+              "match": "\\\\(?:[btnfru\"'\\\\])",
+              "name": "constant.character.escape.emv2"
+            }
+          ]
+        },
+        {
+          "begin": "'",
+          "beginCaptures": {
+            "0": { "name": "punctuation.definition.string.begin.emv2" }
+          },
+          "end": "'",
+          "endCaptures": {
+            "0": { "name": "punctuation.definition.string.end.emv2" }
+          },
+          "name": "string.quoted.single.emv2",
+          "patterns": [
+            {
+              "match": "\\\\(?:[btnfru\"'\\\\])",
+              "name": "constant.character.escape.emv2"
+            }
+          ]
+        }
+      ]
+    },
+    "number": {
+      "patterns": [
+        {
+          "match": "(?i:\\b[0-9]+(?:_[0-9]+)*#[0-9a-f](?:_?[0-9a-f])*#(?:e\\+?[0-9]+)?\\b)",
+          "name": "constant.numeric.based.emv2"
+        },
+        {
+          "match": "(?i:\\b[0-9]+(?:_[0-9]+)*\\.[0-9]+(?:_[0-9]+)*(?:e[+-]?[0-9]+)?\\b)",
+          "name": "constant.numeric.float.emv2"
+        },
+        {
+          "match": "\\b[0-9]+\\b",
+          "name": "constant.numeric.integer.emv2"
+        }
+      ]
+    },
+    "transition-operator": {
+      "match": "-\\[|\\]->|->",
+      "name": "keyword.operator.transition.emv2"
+    },
+    "assignment-operator": {
+      "match": "\\+=>|=>",
+      "name": "keyword.operator.assignment.emv2"
+    },
+    "namespace-separator": {
+      "match": "::",
+      "name": "punctuation.separator.namespace.emv2"
+    },
+    "logical-keyword": {
+      "match": "(?i:\\b(?:and|or|not|ormore|orless)\\b)",
+      "name": "keyword.operator.logical.emv2"
+    },
+    "constant": {
+      "match": "(?i:\\b(?:all|false|noerror|others|same|true)\\b)",
+      "name": "constant.language.emv2"
+    },
+    "section-keyword": {
+      "match": "(?i:\\b(?:detections|events|flows|mappings|paths|properties|propagations|states|transformations|transitions|types)\\b)",
+      "name": "keyword.other.section.emv2"
+    },
+    "keyword": {
+      "match": "(?i:\\b(?:access|annex|applies|behavior|binding|bindings|classifier|component|composite|compute|connection|constant|delta|end|equivalence|error|event|extends|if|in|initial|library|memory|mode|modes|out|package|path|point|processor|propagation|public|recover|reference|renames|repair|set|sink|source|state|subclause|to|type|use|when|with)\\b)",
+      "name": "keyword.control.emv2"
+    },
+    "declaration": {
+      "match": "(?i:\\b[a-z](?:_?[a-z0-9])*)(?=\\s*:)",
+      "name": "entity.name.declaration.emv2"
+    },
+    "namespace": {
+      "match": "(?i:\\b[a-z](?:_?[a-z0-9])*)(?=\\s*::)",
+      "name": "entity.name.namespace.emv2"
+    },
+    "operator": {
+      "match": "\\.\\.|[!@^*+\\-]",
+      "name": "keyword.operator.emv2"
+    },
+    "punctuation": {
+      "match": "[(),.;:\\[\\]{}]",
+      "name": "punctuation.separator.emv2"
+    },
+    "identifier": {
+      "match": "(?i:\\b[a-z](?:_?[a-z0-9])*\\b)",
+      "name": "variable.other.emv2"
+    }
+  }
+}

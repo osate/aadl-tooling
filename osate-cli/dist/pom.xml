@@ -1,0 +1,253 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    OSATE Command Line Interface
+
+    Copyright 2026 Carnegie Mellon University.
+
+    NO WARRANTY. THIS CARNEGIE MELLON UNIVERSITY AND SOFTWARE ENGINEERING INSTITUTE MATERIAL IS
+    FURNISHED ON AN "AS-IS" BASIS. CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND,
+    EITHER EXPRESSED OR IMPLIED, AS TO ANY MATTER INCLUDING, BUT NOT LIMITED TO, WARRANTY OF
+    FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY, OR RESULTS OBTAINED FROM USE OF THE
+    MATERIAL. CARNEGIE MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT TO
+    FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
+
+    Licensed under a BSD (SEI)-style license, please see LICENSE.txt
+    or contact permission@sei.cmu.edu for full terms.
+
+    [DISTRIBUTION STATEMENT A] This material has been approved for public release and unlimited
+    distribution.  Please see Copyright notice for non-US Government use and distribution.
+
+    This Software includes and/or makes use of Third-Party Software each subject to its own license.
+
+    DM26-0838
+ -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.osate</groupId>
+		<artifactId>osate-cli-parent</artifactId>
+		<version>${revision}</version>
+	</parent>
+
+	<artifactId>osate-cli-dist</artifactId>
+	<packaging>jar</packaging>
+
+	<properties>
+		<server.plugins.dir>${project.basedir}/../../aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins</server.plugins.dir>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>org.osate</groupId>
+			<artifactId>osate-cli</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.osate</groupId>
+			<artifactId>osate-workspace-server</artifactId>
+			<version>${project.version}</version>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<finalName>osate-cli-dist</finalName>
+		<plugins>
+			<plugin>
+				<artifactId>maven-resources-plugin</artifactId>
+				<version>3.3.1</version>
+				<executions>
+					<execution>
+						<id>copy-server-plugins</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/dist/lib</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${server.plugins.dir}</directory>
+									<includes>
+										<include>*.jar</include>
+									</includes>
+									<excludes>
+										<!-- Keep in sync with vscode-extension/.vscodeignore -->
+										<exclude>org.eclipse.help*.jar</exclude>
+										<exclude>org.eclipse.elk*.jar</exclude>
+										<exclude>org.eclipse.jdt*.jar</exclude>
+										<exclude>org.eclipse.jface*.jar</exclude>
+										<exclude>org.eclipse.mylyn*.jar</exclude>
+										<exclude>org.eclipse.nebula*.jar</exclude>
+										<exclude>org.eclipse.sirius*.jar</exclude>
+										<exclude>org.eclipse.swt*.jar</exclude>
+										<exclude>org.eclipse.ui*.jar</exclude>
+										<exclude>org.eclipse.*.ui*.jar</exclude>
+										<exclude>org.eclipse.zest*.jar</exclude>
+										<exclude>org.antlr.antlr4-runtime_*.jar</exclude>
+										<exclude>org.osate.branding*.jar</exclude>
+										<exclude>org.osate.ge*.jar</exclude>
+										<exclude>org.osate.*help*.jar</exclude>
+										<exclude>org.yakindu*.jar</exclude>
+										<exclude>org.osate.xtext.aadl2.errormodel.ui*.jar</exclude>
+										<exclude>org.osate.aadl2.instance.textual.ui*.jar</exclude>
+										<exclude>org.osate.aadl2.instance.ui*.jar</exclude>
+										<exclude>org.osate.aadl2.model.editor*.jar</exclude>
+										<exclude>org.osate.analysis.*.ui*.jar</exclude>
+										<exclude>org.osate.modelstats.ui*.jar</exclude>
+										<exclude>org.osate.mylyn.aadl.ui*.jar</exclude>
+										<exclude>org.osate.ui*.jar</exclude>
+										<exclude>org.osate.xtext.aadl2.ui*.jar</exclude>
+										<exclude>org.osate.xtext.aadl2.properties.ui*.jar</exclude>
+										<exclude>org.osate.verify.ui*.jar</exclude>
+										<exclude>org.osate.alisa.workbench.ui*.jar</exclude>
+										<exclude>org.osate.categories.ui*.jar</exclude>
+										<exclude>org.osate.reqspec.ui*.jar</exclude>
+										<exclude>org.osate.organization.ui*.jar</exclude>
+										<exclude>org.osate.alisa.common.ui*.jar</exclude>
+									</excludes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+					<execution>
+						<id>copy-client-jar</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/dist</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${project.basedir}/../osate-cli/target</directory>
+									<includes>
+										<include>osate-cli.jar</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+					<!-- Pinned to the exact version rather than a glob: the server module's
+					     target/ keeps jars from earlier versions after a version bump, and
+					     copying both would leave lib/ ambiguous for
+					     ServerSpawner.locateServerJar and WorkspaceServerMain. -->
+					<execution>
+						<id>copy-server-jar</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/dist/lib</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${project.basedir}/../osate-workspace-server/target</directory>
+									<includes>
+										<include>osate-workspace-server-${project.version}.jar</include>
+									</includes>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+					<execution>
+						<id>copy-scripts</id>
+						<phase>package</phase>
+						<goals>
+							<goal>copy-resources</goal>
+						</goals>
+						<configuration>
+							<outputDirectory>${project.build.directory}/dist/bin</outputDirectory>
+							<resources>
+								<resource>
+									<directory>${project.basedir}/../osate-cli/src/main/scripts</directory>
+									<filtering>false</filtering>
+								</resource>
+							</resources>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>3.1.0</version>
+				<executions>
+					<execution>
+						<id>check-server-plugins</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<fail message="AADL server plugins directory not found at ${server.plugins.dir}. Build the server first: mvn -f ../../aadl-language-server/pom.xml verify -Dtycho.localArtifacts=ignore -DskipTests">
+									<condition>
+										<not>
+											<available file="${server.plugins.dir}" type="dir"/>
+										</not>
+									</condition>
+								</fail>
+							</target>
+						</configuration>
+					</execution>
+					<execution>
+						<id>clean-dist-directory</id>
+						<phase>prepare-package</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<delete dir="${project.build.directory}/dist"/>
+							</target>
+						</configuration>
+					</execution>
+					<execution>
+						<id>chmod-scripts</id>
+						<phase>package</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<chmod file="${project.build.directory}/dist/bin/osate-cli" perm="755"/>
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<version>3.5.2</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<systemPropertyVariables>
+						<osate.cli.bin>${project.build.directory}/dist/bin</osate.cli.bin>
+						<!-- The CLI jar paired with a sibling 'lib/osate-workspace-server-*.jar';
+						     ServerSpawner.locateServerJar walks lib/. Used by tests that need to
+						     pass -Dosate.cli.home, which the launcher script doesn't expose. -->
+						<osate.cli.jar>${project.build.directory}/dist/osate-cli.jar</osate.cli.jar>
+						<osate.cli.fixture>${project.basedir}/../osate-workspace-server/src/test/resources/fixtures/simple-aadl-project</osate.cli.fixture>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>

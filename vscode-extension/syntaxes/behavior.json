@@ -1,0 +1,132 @@
+{
+  "scopeName": "source.aadl2.behavior",
+  "name": "AADL Behavior Annex",
+  "patterns": [
+    { "include": "#comment" },
+    { "include": "#string" },
+    { "include": "#invalid" },
+    { "include": "#number" },
+    { "include": "#transition-operator" },
+    { "include": "#assignment-operator" },
+    { "include": "#comparison-operator" },
+    { "include": "#namespace-separator" },
+    { "include": "#logical-operator" },
+    { "include": "#arithmetic-operator" },
+    { "include": "#section-keyword" },
+    { "include": "#control-keyword" },
+    { "include": "#constant" },
+    { "include": "#keyword" },
+    { "include": "#declaration" },
+    { "include": "#namespace" },
+    { "include": "#operator" },
+    { "include": "#punctuation" },
+    { "include": "#identifier" }
+  ],
+  "repository": {
+    "comment": {
+      "match": "--.*$",
+      "name": "comment.line.double-dash.aadl-behavior"
+    },
+    "string": {
+      "begin": "\"",
+      "beginCaptures": {
+        "0": { "name": "punctuation.definition.string.begin.aadl-behavior" }
+      },
+      "end": "\"",
+      "endCaptures": {
+        "0": { "name": "punctuation.definition.string.end.aadl-behavior" }
+      },
+      "name": "string.quoted.double.aadl-behavior",
+      "patterns": [
+        {
+          "match": "\"\"",
+          "name": "constant.character.escape.aadl-behavior"
+        },
+        {
+          "match": "\\\\(?:[nrtbf\"'\\\\]|u+[0-9a-fA-F]{4}|[0-3][0-7]{0,2}|[4-7][0-7]?)",
+          "name": "constant.character.escape.aadl-behavior"
+        }
+      ]
+    },
+    "invalid": {
+      "match": "(?i:\\b(?:endif|elif)\\b)|==",
+      "name": "invalid.illegal.aadl-behavior"
+    },
+    "number": {
+      "patterns": [
+        {
+          "match": "(?i:\\b[0-9]+(?:_[0-9]+)*#[0-9a-f](?:_?[0-9a-f])*#(?:e\\+?[0-9]+)?\\b)",
+          "name": "constant.numeric.based.aadl-behavior"
+        },
+        {
+          "match": "(?i:\\b[0-9]+(?:_[0-9]+)*\\.[0-9]+(?:_[0-9]+)*(?:e[+-]?[0-9]+)?\\b)",
+          "name": "constant.numeric.float.aadl-behavior"
+        },
+        {
+          "match": "(?i:\\b[0-9]+(?:_[0-9]+)*(?:e\\+?[0-9]+)?\\b)",
+          "name": "constant.numeric.integer.aadl-behavior"
+        }
+      ]
+    },
+    "transition-operator": {
+      "match": "-\\[|\\]->",
+      "name": "keyword.operator.transition.aadl-behavior"
+    },
+    "assignment-operator": {
+      "match": ":=|=>",
+      "name": "keyword.operator.assignment.aadl-behavior"
+    },
+    "comparison-operator": {
+      "match": "!<|!>|!=|<=|>=|=|<|>",
+      "name": "keyword.operator.comparison.aadl-behavior"
+    },
+    "namespace-separator": {
+      "match": "::",
+      "name": "punctuation.separator.namespace.aadl-behavior"
+    },
+    "logical-operator": {
+      "match": "(?i:\\b(?:and|not|or|xor)\\b)",
+      "name": "keyword.operator.logical.aadl-behavior"
+    },
+    "arithmetic-operator": {
+      "match": "(?i:\\b(?:abs|mod|rem)\\b)|\\*\\*|[+\\-*/]",
+      "name": "keyword.operator.arithmetic.aadl-behavior"
+    },
+    "section-keyword": {
+      "match": "(?i:\\b(?:states|transitions|variables)\\b)",
+      "name": "keyword.other.section.aadl-behavior"
+    },
+    "control-keyword": {
+      "match": "(?i:\\b(?:dispatch|do|else|elsif|end|for|forall|if|on|otherwise|stop|timeout|until|while)\\b)",
+      "name": "keyword.control.aadl-behavior"
+    },
+    "constant": {
+      "match": "(?i:\\b(?:any|complete|false|final|fresh|frozen|initial|state|true)\\b)",
+      "name": "constant.language.aadl-behavior"
+    },
+    "keyword": {
+      "match": "(?i:\\b(?:binding|classifier|computation|count|in|lower_bound|reference|upper_bound)\\b)",
+      "name": "keyword.other.aadl-behavior"
+    },
+    "declaration": {
+      "match": "(?i:\\b[a-z](?:_?[a-z0-9])*)(?=\\s*(?:\\[\\s*[0-9]+(?:_[0-9]+)*(?:#[0-9a-f](?:_?[0-9a-f])*#(?:e\\+?[0-9]+)?|e\\+?[0-9]+)?\\s*\\])?\\s*:)",
+      "name": "entity.name.declaration.aadl-behavior"
+    },
+    "namespace": {
+      "match": "(?i:\\b[a-z](?:_?[a-z0-9])*)(?=\\s*::)",
+      "name": "entity.name.namespace.aadl-behavior"
+    },
+    "operator": {
+      "match": ">>|&|[!?]",
+      "name": "keyword.operator.aadl-behavior"
+    },
+    "punctuation": {
+      "match": "\\.\\.|\\[|\\]|#|[(),.;:'{}]",
+      "name": "punctuation.separator.aadl-behavior"
+    },
+    "identifier": {
+      "match": "(?i:\\b[a-z](?:_?[a-z0-9])*\\b)",
+      "name": "variable.other.aadl-behavior"
+    }
+  }
+}

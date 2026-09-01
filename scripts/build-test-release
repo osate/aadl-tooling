@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+
+# Copyright (c) 2004-2026 Carnegie Mellon University and others. (see Contributors file).
+# All Rights Reserved.
+#
+# NO WARRANTY. ALL MATERIAL IS FURNISHED ON AN "AS-IS" BASIS. CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY
+# KIND, EITHER EXPRESSED OR IMPLIED, AS TO ANY MATTER INCLUDING, BUT NOT LIMITED TO, WARRANTY OF FITNESS FOR PURPOSE
+# OR MERCHANTABILITY, EXCLUSIVITY, OR RESULTS OBTAINED FROM USE OF THE MATERIAL. CARNEGIE MELLON UNIVERSITY DOES NOT
+# MAKE ANY WARRANTY OF ANY KIND WITH RESPECT TO FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
+#
+# This program and the accompanying materials are made available under the terms of the Eclipse Public License 2.0
+# which is available at https://www.eclipse.org/legal/epl-2.0/
+# SPDX-License-Identifier: EPL-2.0
+#
+# Created, in part, with funding and support from the United States Government. (see Acknowledgments file).
+#
+# This program includes and/or can make use of certain third party source code, object code, documentation and other
+# files ("Third Party Software"). The Third Party Software that is used by this program is dependent upon your system
+# configuration. By using this program, You agree to comply with any and all relevant Third Party Software terms and
+# conditions contained in any such Third Party Software or separate license file distributed with such Third Party
+# Software. The parties who own the Third Party Software ("Third Party Licensors") are intended third party beneficiaries
+# to this license with respect to the terms applicable to their Third Party Software. Third Party Software licenses
+# only apply to the Third Party Software and not any other portion of this program or this program as a whole.
+
+set -euo pipefail
+
+repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
+osate_dir="${repo_root}/osate2"
+plugins_dir="${repo_root}/aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins"
+provenance_dir="${repo_root}/target"
+
+git -C "${repo_root}" submodule update --init osate2
+
+expected_osate_sha=$(git -C "${repo_root}" ls-files --stage osate2 | awk '$1 == "160000" { print $2 }')
+actual_osate_sha=$(git -C "${osate_dir}" rev-parse HEAD)
+
+if [[ -z "${expected_osate_sha}" || "${actual_osate_sha}" != "${expected_osate_sha}" ]]; then
+	echo "OSATE submodule mismatch." >&2
+	echo "Expected: ${expected_osate_sha:-<missing gitlink>}" >&2
+	echo "Actual:   ${actual_osate_sha}" >&2
+	exit 1
+fi
+
+if [[ -n $(git -C "${osate_dir}" status --porcelain) ]]; then
+	echo "OSATE submodule has uncommitted changes." >&2
+	exit 1
+fi
+
+echo "Building OSATE"
+
+mvn \
+	-T6 \
+	-f "${osate_dir}/pom.xml" \
+	-s "${osate_dir}/releng/osate.releng/settings.xml" \
+	-Plocal \
+	-Dpr.build=false \
+	-Dtycho.localArtifacts=ignore \
+	-Dsign=false \
+	-Dspotbugs=false \
+	-Dcodecoverage=false \
+	-Djavadoc=false \
+	-DfailIfNoTests=false \
+	clean install
+
+echo "Building language tooling"
+
+mvn \
+	-T6 \
+	-f "${repo_root}/pom.xml" \
+	-Dtycho.localArtifacts=ignore \
+	clean verify
+
+echo "Building OSATE CLI"
+
+mvn \
+	-T6 \
+	-f "${repo_root}/osate-cli/pom.xml" \
+	verify
+
+duplicate_bundles=$(
+	find "${plugins_dir}" -type f -name '*.jar' |
+		sed -E 's#^.*/##; s/_[0-9].*$//' |
+		sort |
+		uniq -c |
+		awk '$1 > 1 && $2 != "org.antlr.runtime" { print }'
+)
+
+if [[ -n "${duplicate_bundles}" ]]; then
+	echo "Unexpected duplicate bundle versions in the language-server repository:" >&2
+	echo "${duplicate_bundles}" >&2
+	exit 1
+fi
+
+antlr_osgi_count=$(find "${plugins_dir}" -type f -name 'org.antlr.runtime_*.jar' | wc -l | tr -d ' ')
+antlr3_count=$(find "${plugins_dir}" -type f -name 'org.antlr.runtime_3*.jar' | wc -l | tr -d ' ')
+antlr44_count=$(find "${plugins_dir}" -type f -name 'antlr-runtime-4.4.jar' | wc -l | tr -d ' ')
+if [[ "${antlr_osgi_count}" != "2" || "${antlr3_count}" != "1" || "${antlr44_count}" != "1" ]]; then
+	echo "Expected two org.antlr.runtime bundles, including one 3.x bundle, and one antlr-runtime-4.4.jar;" >&2
+	echo "found ${antlr_osgi_count}, ${antlr3_count}, and ${antlr44_count}." >&2
+	exit 1
+fi
+
+tooling_version=$(mvn -q -f "${repo_root}/pom.xml" help:evaluate \
+	-Dexpression=project.version -DforceStdout)
+osate_version=$(mvn -q -f "${osate_dir}/pom.xml" help:evaluate \
+	-Dexpression=project.version -DforceStdout)
+cli_version=$(mvn -q -f "${repo_root}/osate-cli/pom.xml" help:evaluate \
+	-Dexpression=project.version -DforceStdout)
+
+mkdir -p "${provenance_dir}"
+{
+	printf 'tooling.commit=%s\n' "$(git -C "${repo_root}" rev-parse HEAD)"
+	printf 'tooling.version=%s\n' "${tooling_version}"
+	printf 'osate.commit=%s\n' "${actual_osate_sha}"
+	printf 'osate.gitlink=%s\n' "${expected_osate_sha}"
+	printf 'osate.version=%s\n' "${osate_version}"
+	printf 'cli.version=%s\n' "${cli_version}"
+	printf 'build.timestamp=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+} > "${provenance_dir}/build-provenance.properties"
+
+echo "Language-server repository:"
+echo "  ${repo_root}/aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository"
+echo "VS Code extension:"
+echo "  ${repo_root}/vscode-extension/aadl2-*.vsix"
+echo "CLI distribution:"
+echo "  ${repo_root}/osate-cli/dist/target/dist"
+echo "Build provenance:"
+echo "  ${provenance_dir}/build-provenance.properties"

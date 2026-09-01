@@ -1,0 +1,18 @@
+# Normalize line endings so Windows checkouts do not rewrite tracked sources.
+* text=auto eol=lf
+
+# Windows launchers must keep CRLF to run under cmd.exe.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# Never let Git touch binary artifacts.
+*.jar binary
+*.zip binary
+*.gz binary
+*.tgz binary
+*.vsix binary
+*.png binary
+*.jpg binary
+*.gif binary
+*.ico binary
+*.pdf binary

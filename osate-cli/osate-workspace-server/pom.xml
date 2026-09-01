@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    OSATE Command Line Interface
+
+    Copyright 2026 Carnegie Mellon University.
+
+    NO WARRANTY. THIS CARNEGIE MELLON UNIVERSITY AND SOFTWARE ENGINEERING INSTITUTE MATERIAL IS
+    FURNISHED ON AN "AS-IS" BASIS. CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND,
+    EITHER EXPRESSED OR IMPLIED, AS TO ANY MATTER INCLUDING, BUT NOT LIMITED TO, WARRANTY OF
+    FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY, OR RESULTS OBTAINED FROM USE OF THE
+    MATERIAL. CARNEGIE MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT TO
+    FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
+
+    Licensed under a BSD (SEI)-style license, please see LICENSE.txt
+    or contact permission@sei.cmu.edu for full terms.
+
+    [DISTRIBUTION STATEMENT A] This material has been approved for public release and unlimited
+    distribution.  Please see Copyright notice for non-US Government use and distribution.
+
+    This Software includes and/or makes use of Third-Party Software each subject to its own license.
+
+    DM26-0838
+ -->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.osate</groupId>
+		<artifactId>osate-cli-parent</artifactId>
+		<version>${revision}</version>
+	</parent>
+
+	<artifactId>osate-workspace-server</artifactId>
+	<packaging>jar</packaging>
+
+	<properties>
+		<mainClass>org.osate.cli.server.WorkspaceServerMain</mainClass>
+		<server.plugins.dir>${project.basedir}/../../aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins</server.plugins.dir>
+	</properties>
+
+	<dependencies>
+		<dependency>
+			<groupId>com.google.code.gson</groupId>
+			<artifactId>gson</artifactId>
+			<version>${gson.version}</version>
+			<scope>provided</scope>
+		</dependency>
+		<dependency>
+			<groupId>org.junit.jupiter</groupId>
+			<artifactId>junit-jupiter</artifactId>
+			<version>${junit.version}</version>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>3.1.0</version>
+				<executions>
+					<execution>
+						<id>check-server-plugins</id>
+						<phase>validate</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<fail message="AADL server plugins directory not found at ${server.plugins.dir}. Build the server first: mvn -f ../../aadl-language-server/pom.xml verify -Dtycho.localArtifacts=ignore -DskipTests">
+									<condition>
+										<not>
+											<available file="${server.plugins.dir}" type="dir"/>
+										</not>
+									</condition>
+								</fail>
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<artifactId>maven-dependency-plugin</artifactId>
+				<version>3.8.0</version>
+				<executions>
+					<execution>
+						<id>unpack-gson</id>
+						<phase>generate-resources</phase>
+						<goals>
+							<goal>unpack-dependencies</goal>
+						</goals>
+						<configuration>
+							<includeArtifactIds>gson</includeArtifactIds>
+							<outputDirectory>${project.build.outputDirectory}</outputDirectory>
+							<includes>**/*.class</includes>
+							<!-- Without this, a marker file left in target/ from an earlier
+							     build makes the plugin report 'already exists in destination'
+							     and skip the unpack, producing a server jar with no Gson that
+							     dies at startup with NoClassDefFoundError. -->
+							<overWriteReleases>true</overWriteReleases>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+
+			<plugin>
+				<artifactId>maven-jar-plugin</artifactId>
+				<version>3.4.1</version>
+				<configuration>
+					<archive>
+						<manifest>
+							<mainClass>${mainClass}</mainClass>
+						</manifest>
+					</archive>
+				</configuration>
+			</plugin>
+
+			<plugin>
+				<artifactId>maven-failsafe-plugin</artifactId>
+				<version>3.5.2</version>
+				<executions>
+					<execution>
+						<goals>
+							<goal>integration-test</goal>
+							<goal>verify</goal>
+						</goals>
+					</execution>
+				</executions>
+				<configuration>
+					<systemPropertyVariables>
+						<workspace.server.jar>${project.build.directory}/${project.build.finalName}.jar</workspace.server.jar>
+						<aadl.plugins.dir>${server.plugins.dir}</aadl.plugins.dir>
+					</systemPropertyVariables>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>

@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+    Copyright (c) 2004-2026 Carnegie Mellon University and others. (see Contributors file). 
+    All Rights Reserved.
+   
+    NO WARRANTY. ALL MATERIAL IS FURNISHED ON AN "AS-IS" BASIS. CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY
+    KIND, EITHER EXPRESSED OR IMPLIED, AS TO ANY MATTER INCLUDING, BUT NOT LIMITED TO, WARRANTY OF FITNESS FOR PURPOSE
+    OR MERCHANTABILITY, EXCLUSIVITY, OR RESULTS OBTAINED FROM USE OF THE MATERIAL. CARNEGIE MELLON UNIVERSITY DOES NOT
+    MAKE ANY WARRANTY OF ANY KIND WITH RESPECT TO FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
+   
+    This program and the accompanying materials are made available under the terms of the Eclipse Public License 2.0
+    which is available at https://www.eclipse.org/legal/epl-2.0/
+    SPDX-License-Identifier: EPL-2.0
+   
+    Created, in part, with funding and support from the United States Government. (see Acknowledgments file).
+   
+    This program includes and/or can make use of certain third party source code, object code, documentation and other
+    files ("Third Party Software"). The Third Party Software that is used by this program is dependent upon your system
+    configuration. By using this program, You agree to comply with any and all relevant Third Party Software terms and
+    conditions contained in any such Third Party Software or separate license file distributed with such Third Party
+    Software. The parties who own the Third Party Software ("Third Party Licensors") are intended third party beneficiaries
+    to this license with respect to the terms applicable to their Third Party Software. Third Party Software licenses
+    only apply to the Third Party Software and not any other portion of this program or this program as a whole.
+ -->
+
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<parent>
+		<groupId>org.osate</groupId>
+		<artifactId>aadl.ls.parent</artifactId>
+		<version>1.0.0-SNAPSHOT</version>
+		<relativePath>../..</relativePath>
+	</parent>
+
+	<groupId>org.osate</groupId>
+	<artifactId>org.osate.aadl.ls.repository</artifactId>
+	<packaging>eclipse-repository</packaging>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.eclipse.tycho</groupId>
+				<artifactId>tycho-source-plugin</artifactId>
+				<version>${tycho.version}</version>
+				<configuration>
+					<skip>true</skip>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.eclipse.tycho</groupId>
+				<artifactId>tycho-p2-repository-plugin</artifactId>
+				<version>${tycho.version}</version>
+				<configuration>
+					<includeAllDependencies>true</includeAllDependencies>
+				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-antrun-plugin</artifactId>
+				<version>3.1.0</version>
+				<executions>
+					<execution>
+						<id>extract-antlr-4-runtime</id>
+						<phase>package</phase>
+						<goals>
+							<goal>run</goal>
+						</goals>
+						<configuration>
+							<target>
+								<pathconvert property="behavior.annex.bundle">
+									<fileset dir="${project.build.directory}/repository/plugins">
+										<include name="org.osate.ba_*.jar"/>
+									</fileset>
+								</pathconvert>
+								<fail unless="behavior.annex.bundle"
+									message="Behavior Annex bundle not found in the assembled repository"/>
+								<delete dir="${project.build.directory}/antlr-runtime"/>
+								<mkdir dir="${project.build.directory}/antlr-runtime"/>
+								<unzip src="${behavior.annex.bundle}"
+									dest="${project.build.directory}/antlr-runtime">
+									<patternset>
+										<include name="resources/libs/antlr-runtime-4.4.jar"/>
+									</patternset>
+									<mapper type="flatten"/>
+								</unzip>
+								<copy file="${project.build.directory}/antlr-runtime/antlr-runtime-4.4.jar"
+									todir="${project.build.directory}/repository/plugins"/>
+							</target>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+<!-- 
+			<plugin>
+				<groupId>com.coderplus.maven.plugins</groupId>
+				<artifactId>copy-rename-maven-plugin</artifactId>
+				<version>1.0.1</version>
+				<executions>
+					<execution>
+						<id>rename-file</id>
+						<phase>package</phase>
+						<goals>
+							<goal>rename</goal>
+						</goals>
+						<configuration>
+							<sourceFile>${project.build.directory}/org.osate.build.repository-${project.version}.zip</sourceFile>
+							<destinationFile>${project.build.directory}/osate.repository-${unqualifiedVersion}.${buildQualifier}.zip</destinationFile>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
+ -->
+		</plugins>
+	</build>
+
+</project>
