@@ -1,0 +1,209 @@
+# Releases osate-cli when an osate-cli-v* tag is pushed.
+#
+# The tag does not set the version. <revision> in osate-cli/pom.xml does, and the
+# tag is checked against it, so there stays exactly one source of truth.
+
+name: Release osate-cli
+
+on:
+  push:
+    tags: ["osate-cli-v*"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build and package without creating a release.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+env:
+  NFPM_VERSION: "2.43.0"
+
+jobs:
+  verify-version:
+    name: Verify the tag matches the pom
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: check
+        run: |
+          pom=$(sed -n 's#.*<revision>\(.*\)</revision>.*#\1#p' osate-cli/pom.xml | head -n 1)
+          if [ -z "$pom" ]; then
+            echo "Could not read <revision> from osate-cli/pom.xml." >&2
+            exit 1
+          fi
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag_version="${GITHUB_REF_NAME#osate-cli-v}"
+            if [ "$tag_version" != "$pom" ]; then
+              echo "Tag $GITHUB_REF_NAME implies version $tag_version," >&2
+              echo "but osate-cli/pom.xml declares <revision>$pom</revision>." >&2
+              echo "Bump the pom or retag." >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$pom" >> "$GITHUB_OUTPUT"
+          echo "osate-cli version $pom" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    needs: verify-version
+    uses: ./.github/workflows/build.yml
+    with:
+      build-cli: true
+      # Already covered by CI on main; a tag build does not need to relaunch VS Code.
+      test-extension: false
+      upload-artifacts: false
+
+  package:
+    name: Package and publish
+    needs: [verify-version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: write
+    env:
+      MAVEN_OPTS: -Xmx4g
+      VERSION: ${{ needs.verify-version.outputs.version }}
+      # Job-level so the publish step's `if` can test it; a step cannot read its
+      # own env block from its `if` expression.
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      TAP_REPO: osate/homebrew-osate
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/org/osate
+          key: maven-${{ runner.os }}-${{ needs.build.outputs.osate-sha }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-${{ needs.build.outputs.osate-sha }}-
+            maven-${{ runner.os }}-
+
+      # Populated by the build job, so this is expected to hit.
+      - name: Restore the OSATE build
+        id: osate
+        uses: actions/cache@v4
+        with:
+          path: |
+            osate2/releng/org.osate.build.repository/target/repository
+            ~/.m2/repository/org/osate/osate2-platform
+          key: osate-${{ runner.os }}-${{ needs.build.outputs.osate-sha }}-v1
+
+      - name: Build OSATE
+        if: steps.osate.outputs.cache-hit != 'true'
+        run: |
+          xvfb-run -a mvn \
+            -B -T6 \
+            -f osate2/pom.xml \
+            -s osate2/releng/osate.releng/settings.xml \
+            -Plocal -Dpr.build=false -Dtycho.localArtifacts=ignore \
+            -Dsign=false -Dspotbugs=false -Dcodecoverage=false \
+            -Djavadoc=false -DfailIfNoTests=false \
+            clean install
+
+      - name: Build the tooling and CLI
+        run: ./scripts/build-test-release --skip-osate --skip-extension-tests
+
+      # build-release-artifacts.sh defaults to "auto" and would degrade to a
+      # warning, silently shipping 4 of 8 packages. --nfpm below makes it fatal,
+      # so nfpm has to be present.
+      - name: Install nfpm
+        run: |
+          curl -fsSL --retry 3 -o /tmp/nfpm.deb \
+            "https://github.com/goreleaser/nfpm/releases/download/v${NFPM_VERSION}/nfpm_${NFPM_VERSION}_amd64.deb"
+          sudo dpkg -i /tmp/nfpm.deb
+          nfpm --version
+
+      - name: Build release artifacts
+        run: osate-cli/packaging/scripts/build-release-artifacts.sh --nfpm
+
+      - name: Check the artifact set
+        run: |
+          cd osate-cli/packaging/target/artifacts
+          ls -l
+          for f in \
+            "osate-cli-${VERSION}-linux-x64.tar.gz" \
+            "osate-cli-${VERSION}-linux-arm64.tar.gz" \
+            "osate-cli-${VERSION}-macos-x64.tar.gz" \
+            "osate-cli-${VERSION}-macos-arm64.tar.gz" \
+            "osate-cli_${VERSION}_amd64.deb" \
+            "osate-cli_${VERSION}_arm64.deb" \
+            "osate-cli-${VERSION}-1.x86_64.rpm" \
+            "osate-cli-${VERSION}-1.aarch64.rpm" \
+            SHA256SUMS; do
+            if [ ! -f "$f" ]; then
+              echo "Missing release artifact: $f" >&2
+              exit 1
+            fi
+          done
+          sha256sum -c SHA256SUMS
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: osate-cli-release-${{ env.VERSION }}
+          if-no-files-found: error
+          path: osate-cli/packaging/target/artifacts
+
+      # VERSION is an internal handoff to the formula generator, not an asset.
+      - name: Create the GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          cd osate-cli/packaging/target/artifacts
+          assets=()
+          for f in *; do
+            [ "$f" = VERSION ] || assets+=("$f")
+          done
+          printf 'attaching %s\n' "${assets[@]}"
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "osate-cli $VERSION" \
+            --generate-notes \
+            "${assets[@]}"
+
+      # Must run after the release exists: the formula's URLs are the release
+      # download prefix.
+      - name: Generate the Homebrew formula
+        if: github.ref_type == 'tag'
+        run: |
+          osate-cli/packaging/scripts/generate-homebrew-formula.sh \
+            --base-url "https://github.com/${GITHUB_REPOSITORY}/releases/download/${GITHUB_REF_NAME}"
+          cat osate-cli/packaging/target/recipes/homebrew/Formula/osate-cli.rb
+
+      # GITHUB_TOKEN cannot write to another repository, so this needs a PAT.
+      # Skipped cleanly until HOMEBREW_TAP_TOKEN is configured.
+      - name: Publish the formula to the tap
+        if: github.ref_type == 'tag' && env.TAP_TOKEN != ''
+        run: |
+          git clone "https://x-access-token:${TAP_TOKEN}@github.com/${TAP_REPO}.git" /tmp/tap
+          mkdir -p /tmp/tap/Formula
+          cp osate-cli/packaging/target/recipes/homebrew/Formula/osate-cli.rb /tmp/tap/Formula/
+          cd /tmp/tap
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet -- Formula/osate-cli.rb; then
+            echo "Formula unchanged."
+            exit 0
+          fi
+          git add Formula/osate-cli.rb
+          git commit -m "osate-cli ${VERSION}"
+          git push

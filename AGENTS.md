@@ -35,9 +35,18 @@ Run the complete clean build from the repository root:
 ./scripts/build-test-release
 ```
 
-It verifies the submodule gitlink, builds OSATE, builds/tests the language
-server and VS Code extension, verifies the CLI, validates packaged runtimes,
-and writes `target/build-provenance.properties`.
+It verifies the submodule gitlink, builds OSATE, builds and tests the language
+server, tests the VS Code extension, verifies the CLI, validates packaged
+runtimes, and writes `target/build-provenance.properties`.
+
+Options: `--skip-osate` reuses an existing OSATE build after checking that both
+the p2 repository and the `osate2-platform` target artifact are present;
+`--skip-extension-tests` skips the suites that launch VS Code.
+
+`./scripts/assert-test-counts` fails if a required suite reported zero executed
+tests. Run it after a build rather than trusting the exit status, because the
+integration suites are `@EnabledIf`-gated and vanish silently when the dist
+layout is incomplete.
 
 When OSATE has already been built:
 
@@ -60,11 +69,38 @@ unit tests and type checks have no such requirements.
 Before committing, stage only intended files, run `git diff --cached --check`,
 inspect the staged diff, and preserve unrelated user changes.
 
+## Continuous integration
+
+Workflows live in `.github/workflows/`. `build.yml` is a reusable workflow that
+owns the OSATE cache and delegates the rest to `scripts/build-test-release`;
+`ci.yml` calls it on pull requests and pushes to `main`; the three
+`release-*.yml` workflows are triggered by component-prefixed tags. See
+[RELEASING.md](RELEASING.md).
+
+- The OSATE build output is cached under a key containing the `osate2` gitlink
+  SHA, with **no `restore-keys`** — a p2 repository built from a different OSATE
+  commit must never be silently reused. Moving the pin misses the cache and
+  rebuilds.
+- Actions cache entries are immutable and branch-scoped. A pull request reads
+  `main`'s caches but its own are invisible elsewhere, so a pull request that
+  bumps the submodule always pays for a full OSATE build. The `prune-osate-cache`
+  job on `main` deletes entries for superseded pins.
+- Keep build logic in `scripts/build-test-release`, not in YAML, so local and CI
+  builds cannot diverge.
+
 ## Repository invariants
 
+- **The OSATE phase must run `clean install`, never `verify`.** The language
+  server is a separate Maven invocation and Tycho resolves the
+  `org.osate:osate2-platform` target definition from the Maven local repository,
+  which only `install` populates. `verify` leaves the p2 repository usable and the
+  target definition missing, so the failure looks unrelated.
 - The repository-root `.mvn/` directory is load-bearing: it fixes
   `maven.multiModuleProjectDirectory` so the nested server POM resolves the
-  root `osate2/` repository.
+  root `osate2/` repository. Never run Maven from another working directory.
+- The `osate2/` working tree is needed for every Maven build even when the OSATE
+  output is cached: `aadl-language-server/pom.xml` reads its parent POM from
+  `../osate2/releng/org.osate.build.main` via `<relativePath>`.
 - Advance `osate2/` only to an exact reviewed commit. If its parent version
   changes, update `aadl-language-server/pom.xml` in the same commit.
 - `vscode-extension/server/aadl/lib` is a symlink to the generated server p2

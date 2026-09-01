@@ -1,0 +1,112 @@
+# Releases the language-server p2 repository when an ls-v* tag is pushed.
+#
+# The p2 zip lets other LSP clients and Eclipse installs consume the server
+# without building OSATE. Serving it as a live update site (GitHub Pages) would
+# be the natural follow-up; this only attaches the archive to a release.
+
+name: Release language server
+
+on:
+  push:
+    tags: ["ls-v*"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build without creating a release.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-version:
+    name: Verify the tag matches the pom
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: check
+        run: |
+          # Read the version straight from the pom rather than via Maven, which
+          # would need the OSATE parent resolved just to print a string.
+          pom=$(sed -n '/<artifactId>aadl\.ls\.parent<\/artifactId>/,/<\/version>/ {
+            s#.*<version>\(.*\)</version>.*#\1#p
+          }' aadl-language-server/pom.xml | head -n 1)
+          if [ -z "$pom" ]; then
+            echo "Could not read the aadl.ls.parent version from aadl-language-server/pom.xml." >&2
+            exit 1
+          fi
+
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag_version="${GITHUB_REF_NAME#ls-v}"
+            # The pom carries -SNAPSHOT during development; compare the release part.
+            if [ "$tag_version" != "${pom%-SNAPSHOT}" ]; then
+              echo "Tag $GITHUB_REF_NAME implies version $tag_version," >&2
+              echo "but aadl-language-server/pom.xml declares $pom." >&2
+              exit 1
+            fi
+            if [ "$pom" != "${pom%-SNAPSHOT}" ]; then
+              echo "Refusing to release a SNAPSHOT version ($pom)." >&2
+              echo "Set a release version in aadl-language-server/pom.xml first." >&2
+              exit 1
+            fi
+          fi
+
+          echo "version=$pom" >> "$GITHUB_OUTPUT"
+          echo "language server version $pom" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    needs: verify-version
+    uses: ./.github/workflows/build.yml
+    with:
+      build-cli: false
+      test-extension: false
+      upload-artifacts: true
+
+  publish:
+    name: Publish
+    needs: [verify-version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: language-server-p2
+          path: dist
+
+      - name: Inspect the payload
+        run: |
+          find dist -type f | sort
+          if ! ls dist/aadl-language-server/releng/org.osate.aadl.ls.repository/target/*.zip \
+                 dist/*.zip >/dev/null 2>&1; then
+            echo "No p2 repository archive in the artifact." >&2
+            exit 1
+          fi
+
+      - name: Create the GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          assets=()
+          while IFS= read -r -d '' f; do
+            assets+=("$f")
+          done < <(find dist -type f \( -name '*.zip' -o -name 'build-provenance.properties' \) -print0)
+          if [ ${#assets[@]} -eq 0 ]; then
+            echo "No release assets found." >&2
+            exit 1
+          fi
+          printf 'attaching %s\n' "${assets[@]}"
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "AADL language server $VERSION" \
+            --generate-notes \
+            "${assets[@]}"

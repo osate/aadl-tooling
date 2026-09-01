@@ -1,0 +1,85 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# A superseded push should not keep burning a 2-hour OSATE build.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  # Fast feedback that needs neither OSATE nor the submodule, so it starts
+  # immediately and usually finishes long before the Maven pipeline.
+  extension-checks:
+    name: Extension lint, types, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: vscode-extension
+    steps:
+      - uses: actions/checkout@v5
+
+      # Matches the Node that frontend-maven-plugin pins in vscode-extension/pom.xml.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - run: npm ci
+      - run: npm run check-types
+      - run: npm run lint
+      - run: npm run test:unit
+
+  build:
+    name: Build and test
+    uses: ./.github/workflows/build.yml
+    with:
+      build-cli: true
+      test-extension: true
+      upload-artifacts: true
+
+  # Cache keys are immutable, so a moved submodule pin leaves the previous OSATE
+  # entry behind. Delete it explicitly instead of waiting for the 7-day eviction
+  # or the 10 GB LRU. Only on main, because that is the ref whose caches every
+  # branch and pull request reads from.
+  prune-osate-cache:
+    name: Prune stale OSATE caches
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      actions: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      KEEP: osate-Linux-${{ needs.build.outputs.osate-sha }}-v1
+    steps:
+      - name: Delete OSATE caches for other pins
+        run: |
+          echo "Keeping $KEEP"
+          stale=$(gh cache list \
+            --repo "$GITHUB_REPOSITORY" \
+            --ref "$GITHUB_REF" \
+            --key osate-Linux- \
+            --limit 100 \
+            --json key,id,sizeInBytes \
+            --jq ".[] | select(.key != \"$KEEP\") | \"\(.id) \(.key) \(.sizeInBytes)\"")
+
+          if [ -z "$stale" ]; then
+            echo "No stale OSATE caches."
+            exit 0
+          fi
+
+          echo "$stale" | while read -r id key size; do
+            echo "Deleting $key ($size bytes)"
+            gh cache delete --repo "$GITHUB_REPOSITORY" "$id"
+          done

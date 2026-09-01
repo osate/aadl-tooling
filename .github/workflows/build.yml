@@ -1,0 +1,201 @@
+# Reusable build for the whole repository.
+#
+# OSATE is the long pole: a cold build of the submodule reactor dominates the
+# job. Its output is a pure function of the pinned osate2 commit, so it is cached
+# under a key containing that commit's SHA and rebuilt only when the pin moves.
+#
+# Everything after OSATE runs through scripts/build-test-release, which owns the
+# build order and the packaging validation gates. Do not reimplement those here.
+
+name: Build
+
+on:
+  workflow_call:
+    inputs:
+      build-cli:
+        description: Build and test the osate-cli reactor.
+        type: boolean
+        default: true
+      test-extension:
+        description: Run the VS Code extension test suites.
+        type: boolean
+        default: true
+      upload-artifacts:
+        description: Upload the built deliverables as workflow artifacts.
+        type: boolean
+        default: true
+    outputs:
+      osate-sha:
+        description: The osate2 gitlink commit the build used.
+        value: ${{ jobs.build.outputs.osate-sha }}
+      cli-version:
+        description: The osate-cli version from the build provenance.
+        value: ${{ jobs.build.outputs.cli-version }}
+      extension-version:
+        description: The VS Code extension version from package.json.
+        value: ${{ jobs.build.outputs.extension-version }}
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    env:
+      MAVEN_OPTS: -Xmx4g
+      # ManagedServerLaunchIT asserts a real launchd/systemd user session and
+      # fails rather than skips on hosted runners. Keep it opt-in and off.
+      OSATE_CLI_RUN_MANAGED_IT: ""
+    outputs:
+      osate-sha: ${{ steps.pin.outputs.sha }}
+      cli-version: ${{ steps.versions.outputs.cli }}
+      extension-version: ${{ steps.versions.outputs.extension }}
+
+    steps:
+      # The osate2 working tree is required on every run, cache hit or not: the
+      # language-server pom reads its parent from
+      # osate2/releng/org.osate.build.main via <relativePath>.
+      - uses: actions/checkout@v5
+        with:
+          submodules: true
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+          # Deliberately no `cache: maven`: it keys on **/pom.xml, which includes
+          # every osate2 pom, and it cannot exclude the ~2 GB of OSATE artifacts
+          # that `install` writes. The two caches below do the job precisely.
+
+      - name: Read the osate2 pin
+        id: pin
+        run: |
+          sha=$(git ls-files --stage osate2 | awk '$1 == "160000" { print $2 }')
+          if [ -z "$sha" ]; then
+            echo "No osate2 gitlink found." >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+          echo "osate2 pinned at $sha"
+
+      # Third-party downloads, above all Tycho's resolution of the Eclipse target
+      # platform. Safe to reuse partially, so prefix fallback is enabled. org/osate
+      # is excluded because those artifacts are produced by the build, not
+      # downloaded, and are covered by the exact-keyed cache below.
+      - name: Cache Maven dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.m2/repository
+            !~/.m2/repository/org/osate
+          key: maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('**/pom.xml') }}
+          restore-keys: |
+            maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-
+            maven-${{ runner.os }}-
+
+      # The OSATE build output, keyed exactly on the pinned commit. No
+      # restore-keys: a p2 repository or target definition built from a different
+      # OSATE commit must never be silently reused.
+      - name: Restore the OSATE build
+        id: osate
+        uses: actions/cache@v4
+        with:
+          path: |
+            osate2/releng/org.osate.build.repository/target/repository
+            ~/.m2/repository/org/osate/osate2-platform
+          key: osate-${{ runner.os }}-${{ steps.pin.outputs.sha }}-v1
+
+      # -Plocal downgrades the jgit dirty-tree error to a warning and is required.
+      # `install`, not `verify`: the language server is a separate mvn invocation
+      # and resolves org.osate:osate2-platform from the Maven local repository.
+      - name: Build OSATE
+        if: steps.osate.outputs.cache-hit != 'true'
+        run: |
+          xvfb-run -a mvn \
+            -B -T6 \
+            -f osate2/pom.xml \
+            -s osate2/releng/osate.releng/settings.xml \
+            -Plocal \
+            -Dpr.build=false \
+            -Dtycho.localArtifacts=ignore \
+            -Dsign=false \
+            -Dspotbugs=false \
+            -Dcodecoverage=false \
+            -Djavadoc=false \
+            -DfailIfNoTests=false \
+            clean install
+
+      - name: Report OSATE cache status
+        run: |
+          if [ "${{ steps.osate.outputs.cache-hit }}" = "true" ]; then
+            echo "### OSATE restored from cache" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "### OSATE built from source" >> "$GITHUB_STEP_SUMMARY"
+          fi
+          echo "osate2 pin: \`${{ steps.pin.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Build and test
+        run: |
+          args=(--skip-osate)
+          if [ "${{ inputs.test-extension }}" != "true" ]; then
+            args+=(--skip-extension-tests)
+          fi
+          ./scripts/build-test-release "${args[@]}"
+
+      # scripts/build-test-release stops before the CLI reactor's own reporting,
+      # and several suites are @EnabledIf-gated on system properties, so a green
+      # build does not prove they ran. Assert real counts.
+      - name: Assert tests actually ran
+        run: ./scripts/assert-test-counts ${{ inputs.build-cli && '' || '--skip-cli' }}
+
+      - name: Collect versions
+        id: versions
+        run: |
+          cli=$(sed -n 's/^cli\.version=//p' target/build-provenance.properties)
+          extension=$(node -p "require('./vscode-extension/package.json').version")
+          echo "cli=$cli" >> "$GITHUB_OUTPUT"
+          echo "extension=$extension" >> "$GITHUB_OUTPUT"
+          {
+            echo "| Component | Version |"
+            echo "| --- | --- |"
+            echo "| osate-cli | $cli |"
+            echo "| VS Code extension | $extension |"
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the language-server p2 repository
+        if: inputs.upload-artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: language-server-p2
+          if-no-files-found: error
+          path: |
+            aadl-language-server/releng/org.osate.aadl.ls.repository/target/*.zip
+            target/build-provenance.properties
+
+      - name: Upload the VS Code extension
+        if: inputs.upload-artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vscode-extension
+          if-no-files-found: error
+          path: vscode-extension/aadl2-*.vsix
+
+      - name: Upload the CLI distribution
+        if: inputs.upload-artifacts && inputs.build-cli
+        uses: actions/upload-artifact@v4
+        with:
+          name: osate-cli-dist
+          if-no-files-found: error
+          path: osate-cli/dist/target/dist
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          if-no-files-found: ignore
+          path: |
+            aadl-language-server/plugins/**/target/surefire-reports/*.xml
+            osate-cli/**/target/surefire-reports/*.xml
+            osate-cli/**/target/failsafe-reports/*.xml

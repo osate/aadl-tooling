@@ -29,7 +29,14 @@ It verifies the submodule gitlink, builds OSATE, builds and tests the language
 server and VS Code extension, verifies the CLI, validates packaged runtimes, and
 writes `target/build-provenance.properties`.
 
-When OSATE has already been built, the faster loop is:
+When OSATE has already been built, reuse it instead of rebuilding:
+
+```bash
+./scripts/build-test-release --skip-osate
+```
+
+That checks the existing OSATE output is complete, then runs everything else. For
+a tighter loop on a single module:
 
 ```bash
 mvn verify -Dtycho.localArtifacts=ignore
@@ -39,6 +46,21 @@ mvn -f osate-cli/pom.xml verify
 Run Maven/Tycho builds, CLI integration tests, VS Code integration tests, and
 release packaging in an unrestricted shell — they need the Maven/p2 cache,
 network access, loopback ports, or native service managers.
+
+## Continuous integration
+
+Every pull request runs the full pipeline: extension lint, type check, and unit
+tests immediately, then the OSATE, language-server, extension, and CLI builds
+with all test suites. CI reuses a cached OSATE build keyed on the `osate2`
+submodule commit, so a pull request that moves that pin takes considerably longer
+than one that does not.
+
+To reproduce a CI failure locally, run the same entry point CI uses:
+
+```bash
+./scripts/build-test-release        # or --skip-osate if OSATE is already built
+./scripts/assert-test-counts
+```
 
 ## Test expectations
 

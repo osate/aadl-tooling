@@ -26,8 +26,56 @@ set -euo pipefail
 
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
 osate_dir="${repo_root}/osate2"
+osate_repo_dir="${osate_dir}/releng/org.osate.build.repository/target/repository"
+osate_main_pom="${osate_dir}/releng/org.osate.build.main/pom.xml"
 plugins_dir="${repo_root}/aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins"
+extension_dir="${repo_root}/vscode-extension"
 provenance_dir="${repo_root}/target"
+
+skip_osate=false
+skip_extension_tests=false
+
+usage() {
+	cat <<'EOF'
+Usage: scripts/build-test-release [options]
+
+Builds OSATE, the language server, the VS Code extension, and the CLI, then
+validates the packaged runtimes and writes target/build-provenance.properties.
+
+Options:
+  --skip-osate             Reuse an existing OSATE build instead of rebuilding
+                           it. Requires the OSATE p2 repository and the
+                           osate2-platform target artifact to be present; both
+                           are verified before the remaining phases run. Intended
+                           for CI, where the OSATE output is restored from a
+                           cache keyed on the osate2 submodule commit.
+  --skip-extension-tests   Skip the VS Code extension test suite. The
+                           integration tests download VS Code and need a
+                           display, which is not always available.
+  -h, --help               Show this help.
+EOF
+}
+
+while [[ $# -gt 0 ]]; do
+	case "$1" in
+	--skip-osate)
+		skip_osate=true
+		;;
+	--skip-extension-tests)
+		skip_extension_tests=true
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "Unknown option: $1" >&2
+		usage >&2
+		exit 2
+		;;
+	esac
+	shift
+done
 
 git -C "${repo_root}" submodule update --init osate2
 
@@ -46,21 +94,59 @@ if [[ -n $(git -C "${osate_dir}" status --porcelain) ]]; then
 	exit 1
 fi
 
-echo "Building OSATE"
+if [[ "${skip_osate}" == true ]]; then
+	echo "Reusing existing OSATE build"
 
-mvn \
-	-T6 \
-	-f "${osate_dir}/pom.xml" \
-	-s "${osate_dir}/releng/osate.releng/settings.xml" \
-	-Plocal \
-	-Dpr.build=false \
-	-Dtycho.localArtifacts=ignore \
-	-Dsign=false \
-	-Dspotbugs=false \
-	-Dcodecoverage=false \
-	-Djavadoc=false \
-	-DfailIfNoTests=false \
-	clean install
+	# The language server resolves OSATE through two independent mechanisms, and
+	# --skip-osate has to satisfy both: the p2 repository comes from the
+	# filesystem, while the target definition comes from the Maven local
+	# repository. Check them here so a stale or partial cache fails with an
+	# actionable message instead of a Tycho resolution error.
+	if [[ ! -f "${osate_repo_dir}/artifacts.jar" ]]; then
+		echo "OSATE p2 repository not found at:" >&2
+		echo "  ${osate_repo_dir}" >&2
+		echo "Run without --skip-osate to build it." >&2
+		exit 1
+	fi
+
+	osate_platform_version=$(sed -n 's#.*<osate\.version>\(.*\)</osate\.version>.*#\1#p' \
+		"${osate_main_pom}" | head -n 1)
+	if [[ -z "${osate_platform_version}" ]]; then
+		echo "Could not read <osate.version> from:" >&2
+		echo "  ${osate_main_pom}" >&2
+		echo "The OSATE build layout changed; update this script." >&2
+		exit 1
+	fi
+
+	# -N keeps this to the aggregator pom; resolving the modules would need the
+	# very OSATE artifacts this check is about to look for.
+	local_repo=$(mvn -q -N -f "${repo_root}/pom.xml" help:evaluate \
+		-Dexpression=settings.localRepository -DforceStdout)
+	osate_platform_dir="${local_repo}/org/osate/osate2-platform/${osate_platform_version}"
+	if ! compgen -G "${osate_platform_dir}/*.target" >/dev/null; then
+		echo "OSATE target definition org.osate:osate2-platform:${osate_platform_version} is not installed at:" >&2
+		echo "  ${osate_platform_dir}" >&2
+		echo "The language-server reactor resolves it from the Maven local repository," >&2
+		echo "so the OSATE build must run with 'install'. Run without --skip-osate." >&2
+		exit 1
+	fi
+else
+	echo "Building OSATE"
+
+	mvn \
+		-T6 \
+		-f "${osate_dir}/pom.xml" \
+		-s "${osate_dir}/releng/osate.releng/settings.xml" \
+		-Plocal \
+		-Dpr.build=false \
+		-Dtycho.localArtifacts=ignore \
+		-Dsign=false \
+		-Dspotbugs=false \
+		-Dcodecoverage=false \
+		-Djavadoc=false \
+		-DfailIfNoTests=false \
+		clean install
+fi
 
 echo "Building language tooling"
 
@@ -69,6 +155,31 @@ mvn \
 	-f "${repo_root}/pom.xml" \
 	-Dtycho.localArtifacts=ignore \
 	clean verify
+
+if [[ "${skip_extension_tests}" == true ]]; then
+	echo "Skipping VS Code extension tests"
+else
+	echo "Testing VS Code extension"
+
+	# The Maven reactor only runs npm install/compile/package for the extension,
+	# so its own suites have to be invoked explicitly. Prefer the Node that
+	# frontend-maven-plugin just installed so the version matches the build.
+	extension_path="${PATH}"
+	if [[ -d "${extension_dir}/node" ]]; then
+		extension_path="${extension_dir}/node:${PATH}"
+	fi
+
+	# The integration tests launch a real VS Code, which needs a display.
+	(
+		cd "${extension_dir}"
+		export PATH="${extension_path}"
+		if [[ "$(uname -s)" == "Linux" && -z "${DISPLAY:-}" ]]; then
+			xvfb-run -a npm test
+		else
+			npm test
+		fi
+	)
+fi
 
 echo "Building OSATE CLI"
 

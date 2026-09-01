@@ -1,0 +1,138 @@
+# Releases the VS Code extension when a vscode-v* tag is pushed.
+#
+# package.json holds the version; the tag is validated against it. The Marketplace
+# and Open VSX steps skip cleanly until their tokens are configured, so the
+# workflow is usable for GitHub Releases before those accounts exist.
+
+name: Release VS Code extension
+
+on:
+  push:
+    tags: ["vscode-v*"]
+  workflow_dispatch:
+    inputs:
+      dry-run:
+        description: Build and package without creating a release.
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  verify-version:
+    name: Verify the tag matches package.json
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - id: check
+        run: |
+          manifest=$(node -p "require('./vscode-extension/package.json').version")
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tag_version="${GITHUB_REF_NAME#vscode-v}"
+            if [ "$tag_version" != "$manifest" ]; then
+              echo "Tag $GITHUB_REF_NAME implies version $tag_version," >&2
+              echo "but vscode-extension/package.json declares $manifest." >&2
+              echo "Bump package.json and package-lock.json, or retag." >&2
+              exit 1
+            fi
+          fi
+          echo "version=$manifest" >> "$GITHUB_OUTPUT"
+          echo "extension version $manifest" >> "$GITHUB_STEP_SUMMARY"
+
+  build:
+    needs: verify-version
+    uses: ./.github/workflows/build.yml
+    with:
+      # The extension needs the language server; the CLI is unrelated to this release.
+      build-cli: false
+      test-extension: true
+      upload-artifacts: true
+
+  publish:
+    name: Publish
+    needs: [verify-version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+      # Job-level so the publish steps' `if` expressions can test them.
+      VSCE_PAT: ${{ secrets.VSCE_PAT }}
+      OVSX_PAT: ${{ secrets.OVSX_PAT }}
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: vscode-extension/package-lock.json
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: vscode-extension
+          path: dist
+
+      - name: Check the VSIX
+        run: |
+          vsix="dist/aadl2-${VERSION}.vsix"
+          if [ ! -f "$vsix" ]; then
+            echo "Expected $vsix; got:" >&2
+            ls -l dist >&2
+            exit 1
+          fi
+          # The server plug-ins reach the VSIX through a symlink that vsce
+          # dereferences. An empty server/aadl/lib means the package is useless.
+          count=$(unzip -l "$vsix" | grep -c 'extension/server/aadl/lib/.*\.jar')
+          echo "$count server plug-in jars in the VSIX"
+          if [ "$count" -lt 100 ]; then
+            echo "Too few server plug-ins; the symlink did not resolve." >&2
+            exit 1
+          fi
+          echo "VSIX=$vsix" >> "$GITHUB_ENV"
+
+      - name: Create the GitHub release
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "AADL2 VS Code extension $VERSION" \
+            --generate-notes \
+            "$VSIX"
+
+      - name: Install publishing tools
+        if: github.ref_type == 'tag' && (env.VSCE_PAT != '' || env.OVSX_PAT != '')
+        working-directory: vscode-extension
+        run: npm ci
+
+      # Requires an Azure DevOps publisher named "osate" and a PAT with the
+      # Marketplace "Manage" scope stored as VSCE_PAT.
+      - name: Publish to the VS Code Marketplace
+        if: github.ref_type == 'tag' && env.VSCE_PAT != ''
+        working-directory: vscode-extension
+        run: npx --no-install vsce publish --packagePath "../$VSIX"
+
+      # Requires the "osate" namespace claimed at open-vsx.org and its token
+      # stored as OVSX_PAT.
+      - name: Publish to Open VSX
+        if: github.ref_type == 'tag' && env.OVSX_PAT != ''
+        working-directory: vscode-extension
+        run: npx ovsx publish "../$VSIX" --pat "$OVSX_PAT"
+
+      - name: Note skipped publications
+        if: github.ref_type == 'tag'
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "VSCE_PAT is not set; skipped the VS Code Marketplace." >> "$GITHUB_STEP_SUMMARY"
+          fi
+          if [ -z "$OVSX_PAT" ]; then
+            echo "OVSX_PAT is not set; skipped Open VSX." >> "$GITHUB_STEP_SUMMARY"
+          fi

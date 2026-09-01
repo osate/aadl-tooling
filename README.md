@@ -1,5 +1,7 @@
 # AADL Tooling
 
+[![CI](https://github.com/osate/aadl-tooling/actions/workflows/ci.yml/badge.svg)](https://github.com/osate/aadl-tooling/actions/workflows/ci.yml)
+
 Language tooling for the Architecture Analysis & Design Language (AADL), built
 on OSATE 2.19.0 and Xtext.
 
@@ -76,6 +78,7 @@ workflow.
 - [CLI manual test plan](osate-cli/osate-cli/manual-test.md)
 - [CLI release packaging](osate-cli/packaging/README.md)
 - [Contributing](CONTRIBUTING.md)
+- [Release process](RELEASING.md)
 - [Security policy](SECURITY.md)
 
 ## License
