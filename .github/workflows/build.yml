@@ -206,8 +206,16 @@ jobs:
       # scripts/build-test-release stops before the CLI reactor's own reporting,
       # and several suites are @EnabledIf-gated on system properties, so a green
       # build does not prove they ran. Assert real counts.
+      # Branch in shell, not in an expression: `x && '' || y` always yields y,
+      # because '' is falsy, so the flag would be passed unconditionally and the
+      # CLI assertions would silently never run.
       - name: Assert tests actually ran
-        run: ./scripts/assert-test-counts ${{ inputs.build-cli && '' || '--skip-cli' }}
+        run: |
+          if [ "${{ inputs.build-cli }}" = "true" ]; then
+            ./scripts/assert-test-counts
+          else
+            ./scripts/assert-test-counts --skip-cli
+          fi
 
       - name: Collect versions
         id: versions
