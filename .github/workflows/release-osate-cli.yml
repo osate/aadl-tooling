@@ -70,7 +70,6 @@ jobs:
       contents: write
     env:
       MAVEN_OPTS: -Xmx4g
-      MAVEN_ARGS: -Dosate.cli.test.timeout.seconds=300
       VERSION: ${{ needs.verify-version.outputs.version }}
       # Job-level so the publish step's `if` can test it; a step cannot read its
       # own env block from its `if` expression.

@@ -37,10 +37,6 @@
 
 	<properties>
 		<server.plugins.dir>${project.basedir}/../../aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins</server.plugins.dir>
-		<!-- Per-invocation budget in CliEndToEndIT. Commands that trigger a
-		     workspace rebuild are the slow ones and scale with the machine, so
-		     constrained hardware needs a larger value than a workstation. -->
-		<osate.cli.test.timeout.seconds>120</osate.cli.test.timeout.seconds>
 	</properties>
 
 	<dependencies>
@@ -249,7 +245,6 @@
 						     pass -Dosate.cli.home, which the launcher script doesn't expose. -->
 						<osate.cli.jar>${project.build.directory}/dist/osate-cli.jar</osate.cli.jar>
 						<osate.cli.fixture>${project.basedir}/../osate-workspace-server/src/test/resources/fixtures/simple-aadl-project</osate.cli.fixture>
-						<osate.cli.test.timeout.seconds>${osate.cli.test.timeout.seconds}</osate.cli.test.timeout.seconds>
 					</systemPropertyVariables>
 				</configuration>
 			</plugin>

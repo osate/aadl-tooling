@@ -50,10 +50,6 @@ jobs:
     timeout-minutes: 150
     env:
       MAVEN_OPTS: -Xmx4g
-      # Applies to every mvn invocation the build script makes (Maven 3.9+).
-      # Hosted runners are roughly 3x slower than a workstation here, enough for
-      # CliEndToEndIT's rebuild-triggering commands to exceed the 120s default.
-      MAVEN_ARGS: -Dosate.cli.test.timeout.seconds=300
       # ManagedServerLaunchIT asserts a real launchd/systemd user session and
       # fails rather than skips on hosted runners. Keep it opt-in and off.
       OSATE_CLI_RUN_MANAGED_IT: ""
