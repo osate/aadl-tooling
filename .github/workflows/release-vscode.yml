@@ -122,7 +122,9 @@ jobs:
       - name: Publish to Open VSX
         if: github.ref_type == 'tag' && env.OVSX_PAT != ''
         working-directory: vscode-extension
-        run: npx ovsx publish "../$VSIX" --pat "$OVSX_PAT"
+        # --yes because ovsx is not a devDependency, so npx must fetch it and
+        # would otherwise wait for a confirmation that never comes in CI.
+        run: npx --yes ovsx publish "../$VSIX" --pat "$OVSX_PAT"
 
       - name: Note skipped publications
         if: github.ref_type == 'tag'
