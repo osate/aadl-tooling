@@ -27,11 +27,10 @@ import * as path from 'path';
 import { serverClasspath } from '../../serverClasspath';
 
 suite('language server classpath', () => {
-	test('uses ANTLR 4.4 and excludes the incompatible newer runtime', () => {
+	test('uses every packaged language server bundle', () => {
 		const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aadl-server-classpath-'));
 		try {
 			for (const name of [
-				'antlr-runtime-4.4.jar',
 				'org.antlr.antlr4-runtime_4.13.2.jar',
 				'org.osate.aadl.ls_1.0.0.jar',
 			]) {
@@ -40,7 +39,7 @@ suite('language server classpath', () => {
 
 			const entries = serverClasspath(directory).split(path.delimiter).map(entry => path.basename(entry));
 			assert.deepStrictEqual(entries, [
-				'antlr-runtime-4.4.jar',
+				'org.antlr.antlr4-runtime_4.13.2.jar',
 				'org.osate.aadl.ls_1.0.0.jar',
 			]);
 		} finally {
@@ -48,11 +47,15 @@ suite('language server classpath', () => {
 		}
 	});
 
-	test('fails fast when ANTLR 4.4 is missing', () => {
+	test('ignores non-jar files', () => {
 		const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'aadl-server-classpath-'));
 		try {
 			fs.writeFileSync(path.join(directory, 'org.osate.aadl.ls_1.0.0.jar'), '');
-			assert.throws(() => serverClasspath(directory), /antlr-runtime-4\.4\.jar/);
+			fs.writeFileSync(path.join(directory, 'README.txt'), '');
+			assert.deepStrictEqual(
+				serverClasspath(directory).split(path.delimiter).map(entry => path.basename(entry)),
+				['org.osate.aadl.ls_1.0.0.jar'],
+			);
 		} finally {
 			fs.rmSync(directory, { recursive: true, force: true });
 		}

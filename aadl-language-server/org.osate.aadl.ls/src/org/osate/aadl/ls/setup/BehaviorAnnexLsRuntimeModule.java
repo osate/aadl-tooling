@@ -1,5 +1,5 @@
 /*******************************************************************************
- * Copyright (c) 2004-2026 Carnegie Mellon University and others. (see Contributors file). 
+ * Copyright (c) 2004-2026 Carnegie Mellon University and others. (see Contributors file).
  * All Rights Reserved.
  *
  * NO WARRANTY. ALL MATERIAL IS FURNISHED ON AN "AS-IS" BASIS. CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY
@@ -23,47 +23,22 @@
  *******************************************************************************/
 package org.osate.aadl.ls.setup;
 
-import org.eclipse.xtext.ide.server.ILanguageServerExtension;
-import org.eclipse.xtext.ide.server.UriExtensions;
-import org.eclipse.xtext.ide.server.commands.IExecutableCommandService;
-import org.eclipse.xtext.ide.server.hover.HoverService;
-import org.eclipse.xtext.ide.server.contentassist.ContentAssistService;
-import org.eclipse.xtext.ide.server.symbol.DocumentSymbolMapper;
-import org.osate.aadl.ls.commands.CommandService;
-import org.osate.aadl.ls.services.AadlHoverService;
-import org.osate.aadl.ls.services.EmbeddedBehaviorAnnexContentAssistService;
-import org.osate.aadl.ls.services.AadlLanguageServerExtension;
-import org.osate.aadl.ls.services.AadlSymbolNameProvider;
-import org.osate.aadl.ls.services.AadlUriExtensions;
-import org.osate.xtext.aadl2.ide.AbstractAadl2IdeModule;
+import org.eclipse.xtext.scoping.IGlobalScopeProvider;
+import org.osate.aadl.ls.scoping.Aadl2LsGlobalScopeProvider;
+import org.osate.aadl2.modelsupport.scoping.IEClassGlobalScopeProvider;
+import org.osate.xtext.aadl2.ba.BehaviorAnnexRuntimeModule;
 
 /**
- * Use this class to register ide components.
+ * Reuses the normal Behavior Annex runtime services while replacing Eclipse project scoping with the language
+ * server's multi-root global scope provider.
  */
-public class Aadl2LsIdeModule extends AbstractAadl2IdeModule {
-
-	public Class<? extends IExecutableCommandService> bindIExecutableCommandService() {
-		return CommandService.class;
+public final class BehaviorAnnexLsRuntimeModule extends BehaviorAnnexRuntimeModule {
+	@Override
+	public Class<? extends IGlobalScopeProvider> bindIGlobalScopeProvider() {
+		return Aadl2LsGlobalScopeProvider.class;
 	}
 
-	public Class<? extends DocumentSymbolMapper.DocumentSymbolNameProvider> bindDocumentSymbolNameProvider() {
-		return AadlSymbolNameProvider.class;
+	public Class<? extends IEClassGlobalScopeProvider> bindIEClassGlobalScopeProvider() {
+		return Aadl2LsGlobalScopeProvider.class;
 	}
-
-	public Class<? extends HoverService> bindHoverService() {
-		return AadlHoverService.class;
-	}
-
-	public Class<? extends ContentAssistService> bindContentAssistService() {
-		return EmbeddedBehaviorAnnexContentAssistService.class;
-	}
-
-	public Class<? extends UriExtensions> bindUriExtensions() {
-		return AadlUriExtensions.class;
-	}
-
-	public Class<? extends ILanguageServerExtension> bindILanguageServerExtension() {
-		return AadlLanguageServerExtension.class;
-	}
-
 }
