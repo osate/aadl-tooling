@@ -6,7 +6,7 @@ by pushing a component-prefixed tag; nothing is published from `main`.
 | Component | Tag | Version source |
 | --- | --- | --- |
 | `osate-cli` | `osate-cli-v<version>` | `<revision>` in [`osate-cli/pom.xml`](osate-cli/pom.xml) |
-| VS Code extension | `vscode-v<version>` | `version` in [`vscode-extension/package.json`](vscode-extension/package.json) |
+| VS Code extension | `vscode-v<version>` or `vscode-v<version>-pre` | `version` in [`vscode-extension/package.json`](vscode-extension/package.json) |
 | Language server | `ls-v<version>` | `aadl.ls.parent` version in [`aadl-language-server/pom.xml`](aadl-language-server/pom.xml) |
 
 The tag does not set the version. Each release workflow reads the version out of
@@ -48,6 +48,51 @@ so a missing packager cannot silently drop the four Linux packages.
 Code Marketplace and Open VSX. The VSIX is checked for a plausible number of
 bundled server plug-ins first, because the server reaches it through a symlink
 that would otherwise fail silently.
+
+### Stable or pre-release
+
+A `-pre` suffix on the tag publishes a pre-release; without it the release is
+stable. The version itself is identical either way:
+
+```bash
+git tag vscode-v0.0.2-pre    # pre-release: users must opt in
+git tag vscode-v0.0.2        # stable: offered to everyone
+```
+
+A pre-release is marked as such on the Marketplace and on Open VSX, and the
+GitHub Release gets the pre-release badge. VS Code keeps users on the newest
+*stable* version unless they explicitly switch that extension to the pre-release
+channel, so this is the way to put a build in front of willing testers without
+pushing it at everyone.
+
+The suffix belongs on the tag rather than in the version because VS Code
+extension versions must stay `major.minor.patch` — a pre-release is not a
+different version string, it is a property recorded inside the package. That
+property is written by `vsce package --pre-release`, and `vsce publish` **refuses**
+to publish a package as a pre-release unless it was built as one:
+
+```text
+Cannot use '--pre-release' flag with a package that was not packaged as
+pre-release. Please package it using the '--pre-release' flag and publish again.
+```
+
+So the decision is made at build time, not publish time. The tag drives it all
+the way down: `release-vscode.yml` parses the suffix, passes
+`extension-pre-release` to the build workflow, which passes
+`--extension-pre-release` to `scripts/build-test-release`, which sets
+`-Dvsce.package.script=package:pre-release` so Maven runs the npm script that adds
+the flag. Before publishing, the workflow re-reads the built VSIX manifest and
+fails if the marker disagrees with the tag, so the two cannot drift apart.
+
+Marketplace and Open VSX both treat a published version as permanent — you can
+unpublish an extension but not an individual version. Choosing pre-release does
+not change that; it only changes who is offered the build.
+
+To produce a pre-release VSIX locally:
+
+```bash
+./scripts/build-test-release --skip-osate --extension-pre-release
+```
 
 **`ls-v*`** — [`release-server.yml`](.github/workflows/release-server.yml)
 

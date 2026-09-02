@@ -11,6 +11,7 @@ src/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md
+images/*.svg
 **/tsconfig.json
 **/tsconfig.test.json
 **/.eslintrc.json

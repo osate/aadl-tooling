@@ -5,6 +5,7 @@
 	"description": "Support for AADL2 modeling",
 	"version": "0.0.2",
 	"license": "LicenseRef-BSD-SEI",
+	"icon": "images/icon.png",
 	"repository": {
 		"type": "git",
 		"url": "https://github.com/osate/aadl-tooling.git"
@@ -196,6 +197,7 @@
 		"watch": "node esbuild.js --watch",
 		"package-bundle": "node esbuild.js --production",
 		"package": "npm run package-bundle && vsce package --no-dependencies --follow-symlinks",
+		"package:pre-release": "npm run package-bundle && vsce package --no-dependencies --follow-symlinks --pre-release",
 		"check-types": "tsc -b ./ --noEmit",
 		"compile-tests": "tsc -p tsconfig.test.json",
 		"test:unit": "npm run compile-tests && mocha --ui tdd \"out/test/unit/**/*.test.js\"",

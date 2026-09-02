@@ -1,8 +1,13 @@
 # Releases the VS Code extension when a vscode-v* tag is pushed.
 #
-# package.json holds the version; the tag is validated against it. The Marketplace
-# and Open VSX steps skip cleanly until their tokens are configured, so the
-# workflow is usable for GitHub Releases before those accounts exist.
+# package.json holds the version; the tag is validated against it. A `-pre` suffix
+# on the tag publishes a pre-release: vscode-v0.0.2 is stable, vscode-v0.0.2-pre is
+# not. The suffix lives on the tag rather than in the version because VS Code
+# extension versions must stay major.minor.patch; what marks a pre-release is a
+# property inside the package.
+#
+# The Marketplace and Open VSX steps skip cleanly until their tokens are
+# configured, so the workflow is usable for GitHub Releases before that.
 
 name: Release VS Code extension
 
@@ -23,14 +28,25 @@ jobs:
     timeout-minutes: 5
     outputs:
       version: ${{ steps.check.outputs.version }}
+      pre-release: ${{ steps.check.outputs.pre-release }}
     steps:
       - uses: actions/checkout@v5
 
       - id: check
         run: |
           manifest=$(node -p "require('./vscode-extension/package.json').version")
+          pre_release=false
+
           if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
             tag_version="${GITHUB_REF_NAME#vscode-v}"
+            # A -pre suffix selects a pre-release and is not part of the version.
+            case "$tag_version" in
+            *-pre)
+              pre_release=true
+              tag_version="${tag_version%-pre}"
+              ;;
+            esac
+
             if [ "$tag_version" != "$manifest" ]; then
               echo "Tag $GITHUB_REF_NAME implies version $tag_version," >&2
               echo "but vscode-extension/package.json declares $manifest." >&2
@@ -38,8 +54,14 @@ jobs:
               exit 1
             fi
           fi
+
           echo "version=$manifest" >> "$GITHUB_OUTPUT"
-          echo "extension version $manifest" >> "$GITHUB_STEP_SUMMARY"
+          echo "pre-release=$pre_release" >> "$GITHUB_OUTPUT"
+          if [ "$pre_release" = "true" ]; then
+            echo "extension version $manifest (pre-release)" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "extension version $manifest (stable)" >> "$GITHUB_STEP_SUMMARY"
+          fi
 
   build:
     needs: verify-version
@@ -51,6 +73,9 @@ jobs:
       build-extension: true
       test-extension: true
       upload-artifacts: true
+      # Decided at build time: vsce refuses to publish a package as a pre-release
+      # unless the marker is already in its manifest.
+      extension-pre-release: ${{ needs.verify-version.outputs.pre-release == 'true' }}
 
   publish:
     name: Publish
@@ -61,6 +86,7 @@ jobs:
       contents: write
     env:
       VERSION: ${{ needs.verify-version.outputs.version }}
+      PRE_RELEASE: ${{ needs.verify-version.outputs.pre-release }}
       # Job-level so the publish steps' `if` expressions can test them.
       VSCE_PAT: ${{ secrets.VSCE_PAT }}
       OVSX_PAT: ${{ secrets.OVSX_PAT }}
@@ -94,6 +120,21 @@ jobs:
             echo "Too few server plug-ins; the symlink did not resolve." >&2
             exit 1
           fi
+
+          # The marker is baked in at package time, so confirm the package matches
+          # what the tag asked for. vsce would reject a mismatch in one direction
+          # and silently publish a pre-release as stable in the other.
+          if unzip -p "$vsix" extension.vsixmanifest | grep -q 'Microsoft.VisualStudio.Code.PreRelease'; then
+            marked=true
+          else
+            marked=false
+          fi
+          echo "packaged as pre-release: $marked (tag asked for $PRE_RELEASE)"
+          if [ "$marked" != "$PRE_RELEASE" ]; then
+            echo "VSIX pre-release marker does not match the tag." >&2
+            exit 1
+          fi
+
           echo "VSIX=$vsix" >> "$GITHUB_ENV"
 
       - name: Create the GitHub release
@@ -101,10 +142,15 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          args=()
+          if [ "$PRE_RELEASE" = "true" ]; then
+            args+=(--prerelease)
+          fi
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "AADL2 VS Code extension $VERSION" \
             --generate-notes \
+            "${args[@]+"${args[@]}"}" \
             "$VSIX"
 
       - name: Install publishing tools
@@ -117,7 +163,12 @@ jobs:
       - name: Publish to the VS Code Marketplace
         if: github.ref_type == 'tag' && env.VSCE_PAT != ''
         working-directory: vscode-extension
-        run: npx --no-install vsce publish --packagePath "../$VSIX"
+        run: |
+          args=()
+          if [ "$PRE_RELEASE" = "true" ]; then
+            args+=(--pre-release)
+          fi
+          npx --no-install vsce publish --packagePath "../$VSIX" "${args[@]+"${args[@]}"}"
 
       # Requires the "osate" namespace claimed at open-vsx.org and its token
       # stored as OVSX_PAT.
@@ -126,7 +177,12 @@ jobs:
         working-directory: vscode-extension
         # --yes because ovsx is not a devDependency, so npx must fetch it and
         # would otherwise wait for a confirmation that never comes in CI.
-        run: npx --yes ovsx publish "../$VSIX" --pat "$OVSX_PAT"
+        run: |
+          args=()
+          if [ "$PRE_RELEASE" = "true" ]; then
+            args+=(--pre-release)
+          fi
+          npx --yes ovsx publish "../$VSIX" --pat "$OVSX_PAT" "${args[@]+"${args[@]}"}"
 
       - name: Note skipped publications
         if: github.ref_type == 'tag'

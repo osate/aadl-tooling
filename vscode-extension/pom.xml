@@ -40,6 +40,11 @@
 	<properties>
 		<frontend-maven-plugin.version>1.15.1</frontend-maven-plugin.version>
 		<node.version>v22.22.3</node.version>
+		<!-- Which npm script packages the VSIX. vsce writes the pre-release marker
+		     into the VSIX manifest at package time, and refuses to publish a package
+		     as a pre-release unless it was built as one, so the choice has to be made
+		     here rather than at publish time. -->
+		<vsce.package.script>package</vsce.package.script>
 		<server.plugins.dir>${project.basedir}/../aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins</server.plugins.dir>
 	</properties>
 
@@ -124,7 +129,7 @@
 						</goals>
 						<phase>package</phase>
 						<configuration>
-							<arguments>run package</arguments>
+							<arguments>run ${vsce.package.script}</arguments>
 						</configuration>
 					</execution>
 				</executions>

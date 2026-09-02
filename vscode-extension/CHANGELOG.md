@@ -29,6 +29,7 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+- Add the AADL vector mark as the extension icon.
 - Add bus load analysis command for instance models.
 - Initial release
 
