@@ -364,13 +364,35 @@ public final class ArgParser {
 		return "usage: project <list|create|show|add-dependency|remove-dependency|validate> [args...]";
 	}
 
-	/** Version banner printed by {@code -v}/{@code --version} and atop the help text. */
+	/**
+	 * Version banner printed by {@code -v}/{@code --version} and atop the help text.
+	 *
+	 * <p>Deliberately a single line with nothing after the version: the assembled-CLI
+	 * integration test compares {@code --version} output for exact equality, and the
+	 * packaging scripts' {@code --expect-version} check parses it. Build provenance goes
+	 * in {@link #versionDetail()}, which only {@link #help()} prints.
+	 */
 	public static String versionLine() {
 		return "osate-cli " + Version.get();
 	}
 
+	/**
+	 * Indented provenance lines describing what this CLI was built from.
+	 *
+	 * <p>Answers "which OSATE is this?", which the version alone does not: the behaviour
+	 * a user sees comes mostly from the bundled language server and the OSATE underneath
+	 * it. Commits are abbreviated for reading; {@code version.properties} inside the jar
+	 * keeps them in full.
+	 */
+	public static String versionDetail() {
+		return "  language server " + Version.languageServerVersion() + " ("
+				+ Version.abbreviate(Version.languageServerCommit(), 7) + ")\n"
+				+ "  OSATE           " + Version.osateVersion() + " ("
+				+ Version.abbreviate(Version.osateCommit(), 7) + ")";
+	}
+
 	public static String help() {
-		return versionLine() + "\n\n" + usage() + "\n" + """
+		return versionLine() + "\n" + versionDetail() + "\n\n" + usage() + "\n" + """
 
 				osate-cli is a command-line client for the OSATE AADL language server. Remote
 				commands talk to a long-lived workspace server (one per workspace) over a TCP

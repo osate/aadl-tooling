@@ -80,9 +80,15 @@ osate-cli help
 osate-cli -h | --help
 ```
 
-Prints usage. The long form (`help`) prints the version banner, followed by the full
-description of every command and exit codes; the short form (`-h`/`--help`) prints just
-the synopsis lines.
+Prints usage. The long form (`help`) prints the version banner and the build it came
+from, followed by the full description of every command and exit codes; the short form
+(`-h`/`--help`) prints just the synopsis lines.
+
+```text
+osate-cli 0.1.0
+  language server 0.1.0.v20260902-1320 (7fbfec9)
+  OSATE           2.19.0.vfinal (4256148)
+```
 
 ### version
 
@@ -90,13 +96,45 @@ the synopsis lines.
 osate-cli -v | --version
 ```
 
-Prints `osate-cli <version>` and exits 0.
+Prints `osate-cli <version>` and exits 0. Exactly one line, with nothing after the
+version, so it stays parseable; use `help` for the build provenance.
 
 The version is declared in exactly one place: the `<revision>` property of
 `osate-cli/pom.xml`. Maven filters it into `org/osate/cli/version.properties` inside
 `osate-cli.jar`, and the packaging scripts read it back out of that jar to version the
 release tarballs, `.deb`, `.rpm`, and Homebrew formula. The version reported here is
 therefore always the version of the package the CLI was installed from.
+
+### Build provenance
+
+`help` also reports the bundled language server and the OSATE it was built against,
+because the CLI's own version says nothing about either, and most behaviour comes from
+them:
+
+| Key in `version.properties` | Meaning |
+| --- | --- |
+| `ls.version` | Bundle version of the bundled language server, e.g. `0.1.0.v20260902-1320` |
+| `ls.commit` | Commit of the `osate/aadl-tooling` repository it was built from |
+| `osate.version` | OSATE version, e.g. `2.19.0.vfinal` |
+| `osate.commit` | The reviewed `osate2` gitlink it was built against |
+
+None of these can be discovered at runtime. OSATE bundles carry independent versions
+(`org.osate.aadl2` is 6.1.1, not 2.19.0) and no bundle manifest records a commit, so
+`scripts/build-test-release` supplies all four and Maven filters them into the jar
+alongside the version.
+
+A build that bypasses that script — a bare `mvn -f osate-cli/pom.xml verify` — reports
+`unknown` for all four. That is deliberate, so a hand-built CLI does not claim a
+provenance it does not have; `build-release-artifacts.sh` refuses to package a
+distribution that reports `unknown`, and also refuses one whose `osate.commit` disagrees
+with the current gitlink.
+
+`ls.commit` gains a `-dirty` suffix when the working tree had uncommitted changes, since
+the commit alone would otherwise appear to identify code that was not what got compiled.
+Packaging warns about it rather than failing, so local packaging tests still work.
+
+Commits are abbreviated to seven characters in `help`; `version.properties` keeps them in
+full for anything parsing the jar.
 
 ### project
 

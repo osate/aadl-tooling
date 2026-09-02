@@ -114,6 +114,24 @@ if [[ -n $(git -C "${osate_dir}" status --porcelain) ]]; then
 	exit 1
 fi
 
+# Recorded before anything is built, so it describes the sources that went in.
+# The superproject is allowed to be dirty during development, unlike the
+# submodule, so mark it rather than refusing: a commit alone would otherwise
+# claim to identify code that is not what was compiled.
+tooling_commit=$(git -C "${repo_root}" rev-parse HEAD)
+if [[ -n $(git -C "${repo_root}" status --porcelain) ]]; then
+	tooling_commit="${tooling_commit}-dirty"
+fi
+
+osate_version=$(sed -n 's#.*<osate\.version>\(.*\)</osate\.version>.*#\1#p' \
+	"${osate_main_pom}" | head -n 1)
+if [[ -z "${osate_version}" ]]; then
+	echo "Could not read <osate.version> from:" >&2
+	echo "  ${osate_main_pom}" >&2
+	echo "The OSATE build layout changed; update this script." >&2
+	exit 1
+fi
+
 if [[ "${skip_osate}" == true ]]; then
 	echo "Reusing existing OSATE build"
 
@@ -129,22 +147,13 @@ if [[ "${skip_osate}" == true ]]; then
 		exit 1
 	fi
 
-	osate_platform_version=$(sed -n 's#.*<osate\.version>\(.*\)</osate\.version>.*#\1#p' \
-		"${osate_main_pom}" | head -n 1)
-	if [[ -z "${osate_platform_version}" ]]; then
-		echo "Could not read <osate.version> from:" >&2
-		echo "  ${osate_main_pom}" >&2
-		echo "The OSATE build layout changed; update this script." >&2
-		exit 1
-	fi
-
 	# -N keeps this to the aggregator pom; resolving the modules would need the
 	# very OSATE artifacts this check is about to look for.
 	local_repo=$(mvn -q -N -f "${repo_root}/pom.xml" help:evaluate \
 		-Dexpression=settings.localRepository -DforceStdout)
-	osate_platform_dir="${local_repo}/org/osate/osate2-platform/${osate_platform_version}"
+	osate_platform_dir="${local_repo}/org/osate/osate2-platform/${osate_version}"
 	if ! compgen -G "${osate_platform_dir}/*.target" >/dev/null; then
-		echo "OSATE target definition org.osate:osate2-platform:${osate_platform_version} is not installed at:" >&2
+		echo "OSATE target definition org.osate:osate2-platform:${osate_version} is not installed at:" >&2
 		echo "  ${osate_platform_dir}" >&2
 		echo "The language-server reactor resolves it from the Maven local repository," >&2
 		echo "so the OSATE build must run with 'install'. Run without --skip-osate." >&2
@@ -228,9 +237,25 @@ if [[ "${skip_cli}" == true ]]; then
 else
 	echo "Building OSATE CLI"
 
+	# The language-server bundle version is only knowable after its build, and the
+	# osate2 gitlink is only knowable here, so the CLI reactor cannot derive either
+	# on its own. The underscore in the glob keeps org.osate.aadl.ls.tests out.
+	ls_bundle=$(find "${plugins_dir}" -name 'org.osate.aadl.ls_*.jar' -exec basename {} \; | head -n 1)
+	ls_version=${ls_bundle#org.osate.aadl.ls_}
+	ls_version=${ls_version%.jar}
+	if [[ -z "${ls_version}" ]]; then
+		echo "Could not determine the language-server bundle version from:" >&2
+		echo "  ${plugins_dir}" >&2
+		exit 1
+	fi
+
 	mvn \
 		-T6 \
 		-f "${repo_root}/osate-cli/pom.xml" \
+		-Daadl.ls.version="${ls_version}" \
+		-Daadl.ls.commit="${tooling_commit}" \
+		-Dosate.version="${osate_version}" \
+		-Dosate.commit="${expected_osate_sha}" \
 		verify
 fi
 
@@ -259,14 +284,12 @@ fi
 
 tooling_version=$(mvn -q -f "${repo_root}/pom.xml" help:evaluate \
 	-Dexpression=project.version -DforceStdout)
-osate_version=$(mvn -q -f "${osate_dir}/pom.xml" help:evaluate \
-	-Dexpression=project.version -DforceStdout)
 cli_version=$(mvn -q -f "${repo_root}/osate-cli/pom.xml" help:evaluate \
 	-Dexpression=project.version -DforceStdout)
 
 mkdir -p "${provenance_dir}"
 {
-	printf 'tooling.commit=%s\n' "$(git -C "${repo_root}" rev-parse HEAD)"
+	printf 'tooling.commit=%s\n' "${tooling_commit}"
 	printf 'tooling.version=%s\n' "${tooling_version}"
 	printf 'osate.commit=%s\n' "${actual_osate_sha}"
 	printf 'osate.gitlink=%s\n' "${expected_osate_sha}"

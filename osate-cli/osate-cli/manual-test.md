@@ -167,6 +167,10 @@ process in its own process tree.
 | 1.4a | `osate-cli -v` | exit 0; `osate-cli <version>` on stdout |
 | 1.4b | `osate-cli --version` | exit 0; same output as 1.4a |
 | 1.4c | `osate-cli -v` from an installed package | version matches the installed Homebrew/deb/rpm package version (`brew list --versions osate-cli`, `dpkg -s osate-cli`, or `rpm -q osate-cli`) |
+| 1.4d | `osate-cli help` | lines 2-3 report the build: `  language server <version> (<commit>)` and `  OSATE <version> (<commit>)`, both indented |
+| 1.4e | `osate-cli --version` | still exactly one line; provenance appears only in `help` |
+| 1.4f | `osate-cli help` from an installed package | neither provenance line says `unknown`; a released package always records what it was built from |
+| 1.4g | `osate-cli help` from a locally built dist with a dirty tree | the language-server commit carries a `-dirty` suffix |
 | 1.5 | `osate-cli c1 bogus` | exit 2; "missing -p <port>" or unknown-command error |
 | 1.6 | `osate-cli c1 -p 1 bogus` | exit 2; "unknown command: bogus" |
 | 1.7 | `osate-cli c1 -p abc ping` | exit 2; "-p/--port must be an integer in 1..65535: abc" |

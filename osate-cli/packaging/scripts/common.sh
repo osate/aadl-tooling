@@ -69,6 +69,57 @@ version_from_dist() {
 	printf '%s\n' "$version"
 }
 
+# Reads one build-provenance key from the version.properties resource in a built jar.
+provenance_from_dist() {
+	local dist_dir=$1
+	local key=$2
+	local jar="$dist_dir/osate-cli.jar"
+
+	[ -f "$jar" ] || die "osate-cli.jar not found in $dist_dir"
+	require_command unzip
+	unzip -p "$jar" org/osate/cli/version.properties 2>/dev/null |
+		awk -F= -v k="^$key=" '$0 ~ k { gsub(/[[:space:]]/, "", $2); print $2; exit }'
+}
+
+# A release must be able to say which OSATE it was built from, and must say so
+# truthfully. Both checks matter because the values are only supplied when the build
+# goes through scripts/build-test-release: packaging a CLI built any other way would
+# otherwise ship 'unknown', and nothing would catch a recorded OSATE commit that
+# disagrees with the submodule pin actually built.
+require_release_provenance() {
+	local dist_dir=$1
+	local expected_osate_commit=${2:-}
+	local key value
+
+	for key in ls.version ls.commit osate.version osate.commit; do
+		value=$(provenance_from_dist "$dist_dir" "$key")
+		[ -n "$value" ] || die "missing $key in osate-cli.jar; build via scripts/build-test-release"
+		case "$value" in
+			unknown | '${'*)
+				die "osate-cli.jar reports $key=$value; a release must record real provenance. Build via scripts/build-test-release, which supplies it."
+				;;
+		esac
+	done
+
+	# A warning, not a failure: the -dirty suffix is recorded in the jar and shown by
+	# 'osate-cli help', so the artifact is not misleading, and refusing would block the
+	# local packaging smoke tests in packaging/README.md. A CI release builds from a
+	# clean checkout and never reaches this.
+	value=$(provenance_from_dist "$dist_dir" ls.commit)
+	case "$value" in
+		*-dirty)
+			warn "packaging a CLI built from a dirty tree (ls.commit=$value)"
+			;;
+	esac
+
+	if [ -n "$expected_osate_commit" ]; then
+		value=$(provenance_from_dist "$dist_dir" osate.commit)
+		if [ "$value" != "$expected_osate_commit" ]; then
+			die "osate-cli.jar records osate.commit=$value but the osate2 gitlink is $expected_osate_commit"
+		fi
+	fi
+}
+
 # Reads the version recorded next to the artifacts by build-release-artifacts.sh.
 version_from_artifacts() {
 	local artifacts_dir=$1
