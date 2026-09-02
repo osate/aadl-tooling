@@ -20,6 +20,10 @@ on:
         description: Build the VS Code extension.
         type: boolean
         default: true
+      extension-pre-release:
+        description: Mark the VSIX as a pre-release.
+        type: boolean
+        default: false
       test-extension:
         description: Run the VS Code extension test suites.
         type: boolean
@@ -211,6 +215,9 @@ jobs:
           fi
           if [ "${{ inputs.build-cli }}" != "true" ]; then
             args+=(--skip-cli)
+          fi
+          if [ "${{ inputs.extension-pre-release }}" = "true" ]; then
+            args+=(--extension-pre-release)
           fi
           printf 'build-test-release %s\n' "${args[*]}"
           ./scripts/build-test-release "${args[@]}"

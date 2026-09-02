@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: AADL Language Server Tests
 Bundle-SymbolicName: org.osate.aadl.ls.tests;singleton:=true
-Bundle-Version: 1.0.0.qualifier
+Bundle-Version: 0.1.0.qualifier
 Bundle-Vendor: CMU-SEI
 Fragment-Host: org.osate.aadl.ls
 Automatic-Module-Name: org.osate.aadl.ls.tests

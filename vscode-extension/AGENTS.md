@@ -58,8 +58,15 @@ tests.
 Package the extension with:
 
 ```bash
-npm run package
+npm run package              # stable
+npm run package:pre-release  # marked as a pre-release
 ```
+
+The pre-release marker is written into the VSIX manifest at package time, and
+`vsce publish` refuses to publish a package as a pre-release unless it was built
+as one, so it cannot be added later. `vscode-extension/pom.xml` selects the script
+through the `vsce.package.script` property, which is how a tagged release drives
+it. See [../RELEASING.md](../RELEASING.md).
 
 For a server plus extension build, first build OSATE, then run these from the
 repository root in this order:
