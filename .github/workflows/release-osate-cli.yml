@@ -49,18 +49,12 @@ jobs:
           echo "version=$pom" >> "$GITHUB_OUTPUT"
           echo "osate-cli version $pom" >> "$GITHUB_STEP_SUMMARY"
 
-  build:
-    needs: verify-version
-    uses: ./.github/workflows/build.yml
-    with:
-      build-cli: true
-      # Already covered by CI on main; a tag build does not need to relaunch VS Code.
-      test-extension: false
-      upload-artifacts: false
-
+  # No separate build job: the package job needs the built dist tree on disk to
+  # run the packaging scripts, so calling the reusable build workflow as well
+  # meant building the language server, extension and CLI twice per release.
   package:
-    name: Package and publish
-    needs: [verify-version, build]
+    name: Build, package and publish
+    needs: verify-version
     runs-on: ubuntu-latest
     timeout-minutes: 150
     permissions:
@@ -82,15 +76,25 @@ jobs:
           distribution: temurin
           java-version: "21"
 
+      - name: Read the osate2 pin
+        id: pin
+        run: |
+          sha=$(git ls-files --stage osate2 | awk '$1 == "160000" { print $2 }')
+          if [ -z "$sha" ]; then
+            echo "No osate2 gitlink found." >&2
+            exit 1
+          fi
+          echo "sha=$sha" >> "$GITHUB_OUTPUT"
+
       - name: Cache Maven dependencies
         uses: actions/cache@v5
         with:
           path: |
             ~/.m2/repository
             !~/.m2/repository/org/osate
-          key: maven-${{ runner.os }}-${{ needs.build.outputs.osate-sha }}-${{ hashFiles('**/pom.xml') }}
+          key: maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('**/pom.xml') }}
           restore-keys: |
-            maven-${{ runner.os }}-${{ needs.build.outputs.osate-sha }}-
+            maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-
             maven-${{ runner.os }}-
 
       # Populated by the build job, so this is expected to hit.
@@ -101,7 +105,7 @@ jobs:
           path: |
             osate2/releng/org.osate.build.repository/target/repository
             ~/.m2/repository/org/osate/osate2-platform
-          key: osate-${{ runner.os }}-${{ needs.build.outputs.osate-sha }}-v1
+          key: osate-${{ runner.os }}-${{ steps.pin.outputs.sha }}-v1
 
       - name: Build OSATE
         if: steps.osate.outputs.cache-hit != 'true'
@@ -116,7 +120,7 @@ jobs:
             clean install
 
       - name: Build the tooling and CLI
-        run: ./scripts/build-test-release --skip-osate --skip-extension-tests
+        run: ./scripts/build-test-release --skip-osate --skip-extension
 
       # build-release-artifacts.sh defaults to "auto" and would degrade to a
       # warning, silently shipping 4 of 8 packages. --nfpm below makes it fatal,
@@ -197,9 +201,14 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           # A tap that has never been written to has no commits, so HEAD is
-          # unborn and there is no branch to push. Adopt whatever branch the
-          # clone put us on, falling back to main.
-          branch=$(git symbolic-ref --quiet --short HEAD || echo main)
+          # unborn and there is no branch to push. Pin the name rather than
+          # inheriting the runner's init.defaultBranch, which would otherwise
+          # decide whether the tap gets `main` or `master`.
+          if git rev-parse --quiet --verify HEAD >/dev/null; then
+            branch=$(git symbolic-ref --short HEAD)
+          else
+            branch=main
+          fi
           git checkout -B "$branch"
 
           mkdir -p Formula

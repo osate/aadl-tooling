@@ -33,7 +33,9 @@ extension_dir="${repo_root}/vscode-extension"
 provenance_dir="${repo_root}/target"
 
 skip_osate=false
+skip_extension=false
 skip_extension_tests=false
+skip_cli=false
 
 usage() {
 	cat <<'EOF'
@@ -49,9 +51,12 @@ Options:
                            are verified before the remaining phases run. Intended
                            for CI, where the OSATE output is restored from a
                            cache keyed on the osate2 submodule commit.
+  --skip-extension         Do not build the VS Code extension. Implies
+                           --skip-extension-tests.
   --skip-extension-tests   Skip the VS Code extension test suite. The
                            integration tests download VS Code and need a
                            display, which is not always available.
+  --skip-cli               Do not build the osate-cli reactor.
   -h, --help               Show this help.
 EOF
 }
@@ -61,8 +66,15 @@ while [[ $# -gt 0 ]]; do
 	--skip-osate)
 		skip_osate=true
 		;;
+	--skip-extension)
+		skip_extension=true
+		skip_extension_tests=true
+		;;
 	--skip-extension-tests)
 		skip_extension_tests=true
+		;;
+	--skip-cli)
+		skip_cli=true
 		;;
 	-h | --help)
 		usage
@@ -159,13 +171,17 @@ mvn \
 	-Dtycho.localArtifacts=ignore \
 	clean verify
 
-echo "Building VS Code extension"
+if [[ "${skip_extension}" == true ]]; then
+	echo "Skipping VS Code extension"
+else
+	echo "Building VS Code extension"
 
-mvn \
-	-T6 \
-	-f "${repo_root}/vscode-extension/pom.xml" \
-	-Dtycho.localArtifacts=ignore \
-	clean verify
+	mvn \
+		-T6 \
+		-f "${repo_root}/vscode-extension/pom.xml" \
+		-Dtycho.localArtifacts=ignore \
+		clean verify
+fi
 
 if [[ "${skip_extension_tests}" == true ]]; then
 	echo "Skipping VS Code extension tests"
@@ -192,12 +208,16 @@ else
 	)
 fi
 
-echo "Building OSATE CLI"
+if [[ "${skip_cli}" == true ]]; then
+	echo "Skipping OSATE CLI"
+else
+	echo "Building OSATE CLI"
 
-mvn \
-	-T6 \
-	-f "${repo_root}/osate-cli/pom.xml" \
-	verify
+	mvn \
+		-T6 \
+		-f "${repo_root}/osate-cli/pom.xml" \
+		verify
+fi
 
 duplicate_bundles=$(
 	find "${plugins_dir}" -type f -name '*.jar' |

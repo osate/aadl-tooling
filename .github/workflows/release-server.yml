@@ -60,7 +60,9 @@ jobs:
     needs: verify-version
     uses: ./.github/workflows/build.yml
     with:
+      # This release ships the p2 repository only, so neither consumer is needed.
       build-cli: false
+      build-extension: false
       test-extension: false
       upload-artifacts: true
 
