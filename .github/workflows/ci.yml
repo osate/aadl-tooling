@@ -44,6 +44,7 @@ jobs:
     uses: ./.github/workflows/build.yml
     with:
       build-cli: true
+      build-extension: true
       test-extension: true
       upload-artifacts: true
 

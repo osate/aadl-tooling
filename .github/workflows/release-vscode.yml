@@ -45,8 +45,10 @@ jobs:
     needs: verify-version
     uses: ./.github/workflows/build.yml
     with:
-      # The extension needs the language server; the CLI is unrelated to this release.
+      # The extension needs the language server; the CLI is unrelated to this
+      # release and is now genuinely skipped rather than built and ignored.
       build-cli: false
+      build-extension: true
       test-extension: true
       upload-artifacts: true
 

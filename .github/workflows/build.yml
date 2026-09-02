@@ -16,6 +16,10 @@ on:
         description: Build and test the osate-cli reactor.
         type: boolean
         default: true
+      build-extension:
+        description: Build the VS Code extension.
+        type: boolean
+        default: true
       test-extension:
         description: Run the VS Code extension test suites.
         type: boolean
@@ -195,12 +199,20 @@ jobs:
           fi
           echo "osate2 pin: \`${{ steps.pin.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
 
+      # Build only what the caller asked for. A release of one component has no
+      # reason to build the other two.
       - name: Build and test
         run: |
           args=(--skip-osate)
-          if [ "${{ inputs.test-extension }}" != "true" ]; then
+          if [ "${{ inputs.build-extension }}" != "true" ]; then
+            args+=(--skip-extension)
+          elif [ "${{ inputs.test-extension }}" != "true" ]; then
             args+=(--skip-extension-tests)
           fi
+          if [ "${{ inputs.build-cli }}" != "true" ]; then
+            args+=(--skip-cli)
+          fi
+          printf 'build-test-release %s\n' "${args[*]}"
           ./scripts/build-test-release "${args[@]}"
 
       # scripts/build-test-release stops before the CLI reactor's own reporting,
@@ -242,7 +254,7 @@ jobs:
             target/build-provenance.properties
 
       - name: Upload the VS Code extension
-        if: inputs.upload-artifacts
+        if: inputs.upload-artifacts && inputs.build-extension
         uses: actions/upload-artifact@v6
         with:
           name: vscode-extension
