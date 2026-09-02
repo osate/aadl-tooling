@@ -23,7 +23,35 @@
 
 # AADL2 Extension for Visual Studio Code
 
-Edit AADL files, instantiate, run latency, bus load, and mode reachability analysis
+Edit and validate AADL models, instantiate component implementations, and run
+latency, bus load, and mode reachability analyses without leaving Visual Studio
+Code.
+
+## Installation
+
+In Visual Studio Code, open the Extensions view, search for `AADL2` from the
+`osate` publisher, and select **Install**.
+
+To install a downloaded release instead, open the Extensions view menu, select
+**Install from VSIX...**, and choose the `aadl2-<version>.vsix` file.
+
+The extension automatically installs its required Red Hat Java extension
+dependency.
+
+## Getting Started
+
+1. Open a folder or workspace containing `.aadl` files.
+2. Open an AADL file. The language server starts automatically and reports
+   syntax and validation problems in the editor and Problems view.
+3. Place the cursor inside a component implementation and run
+   **AADL2: Instantiate** from the Command Palette. The generated `.aaxl2`
+   instance model is written under the owning workspace root's `instances/`
+   directory.
+4. Right-click the generated `.aaxl2` file in the Explorer and select a latency,
+   bus load, or mode reachability analysis.
+
+Analysis summaries appear as notifications. Report paths and detailed
+diagnostics are written to the **AADL2 Language Server** output channel.
 
 ## Features
 
@@ -45,17 +73,30 @@ Edit AADL files, instantiate, run latency, bus load, and mode reachability analy
 
 ## Requirements
 
-Depends on the Red Hat Java extension (`redhat.java`), which is installed
-automatically. The language server uses the tooling JRE provided by that
-extension and verifies that it is Java 21 or newer. If that JRE is unavailable
-or outdated, update or reinstall the Red Hat Java extension.
+The extension requires:
+
+- Visual Studio Code 1.110 or newer
+- The Red Hat Java extension (`redhat.java`), installed automatically
+- Java 21 or newer in the tooling JRE provided by the Red Hat Java extension
+
+The AADL extension always uses that tooling JRE to run its bundled language
+server. If the JRE is unavailable or outdated, update or reinstall the Red Hat
+Java extension.
 
 ## Extension Settings
 
-- `aadl2Server.maxNumberOfProblems` — maximum number of problems reported per
-  file (default 100)
-- `aadl2Server.trace.server` — `off` | `messages` | `verbose`; traces LSP
-  traffic between VSCode and the language server
+| Setting | Default | Description |
+| --- | --- | --- |
+| `aadl2Server.maxNumberOfProblems` | `100` | Maximum number of problems reported per file. |
+| `aadl2Server.trace.server` | `off` | LSP traffic tracing: `off`, `messages`, or `verbose`. |
+| `aadl2Server.latency.asynchronousSystem` | `true` | Assume an asynchronous system; disable for a synchronous system. |
+| `aadl2Server.latency.majorFrameDelay` | `true` | Use major-frame delay for partition output; disable to use partition-end delay. |
+| `aadl2Server.latency.worstCaseDeadline` | `true` | Use worst-case processing time based on deadline; disable for best-case compute execution time. |
+| `aadl2Server.latency.bestCaseEmptyQueue` | `true` | Assume an empty queue for best-case latency; disable to assume a full queue. |
+| `aadl2Server.latency.disableQueuingLatency` | `false` | Exclude queuing latency from latency analysis. |
+| `aadl2Server.reachability.generateDot` | `true` | Generate a DOT mode reachability report. |
+| `aadl2Server.reachability.generateHtml` | `true` | Generate an HTML mode reachability report. |
+| `aadl2Server.reachability.generateSmv` | `true` | Generate an SMV mode reachability report. |
 
 ## Commands
 
@@ -70,10 +111,48 @@ or outdated, update or reinstall the Red Hat Java extension.
 - `AADL2: Restart Language Server` — stops and restarts the language client
   without reloading VSCode
 
-## Known Issues
+The analysis commands are available from the Explorer context menu for
+`.aaxl2` files. Use the Command Palette for instantiation and language-server
+restart.
 
-Very early prototype. Jump to definition and AadlDoc hover do not yet work
-inside annexes.
+## Generated Files
+
+- Instantiation writes `.aaxl2` instance models under the owning workspace
+  root's `instances/` directory.
+- Latency analysis writes reports under
+  `<instance-folder>/reports/latency/`.
+- Bus load analysis writes reports under
+  `<instance-folder>/reports/BusLoad/`.
+- Mode reachability analysis writes the selected DOT, HTML, and SMV reports
+  under `<instance-folder>/reports/som-reachability/`.
+
+## Troubleshooting
+
+### The language server does not start
+
+Open **View: Toggle Output**, select **AADL2 Language Server**, and inspect the
+startup message. The channel identifies the Java executable and version used to
+launch the server.
+
+If the Red Hat Java extension does not provide a tooling JRE, or provides a Java
+version older than 21, update or reinstall that extension.
+
+### Editing results appear stale
+
+Run **AADL2: Restart Language Server** from the Command Palette. This restarts
+the language client and bundled server without reloading Visual Studio Code.
+
+### More protocol detail is needed
+
+Set `aadl2Server.trace.server` to `messages` or `verbose`, reproduce the
+problem, and inspect the **AADL2 Language Server** output channel. Protocol
+traces can contain model text, paths, and other workspace information; review
+them before sharing.
+
+Report reproducible problems through the repository's
+[issue tracker](https://github.com/osate/aadl-tooling/issues). Include the
+extension version, Visual Studio Code version, operating system, reproduction
+steps, and relevant output-channel messages.
 
 ## Release Notes
 
