@@ -2,7 +2,7 @@ Manifest-Version: 1.0
 Bundle-ManifestVersion: 2
 Bundle-Name: AADL Language Server
 Bundle-SymbolicName: org.osate.aadl.ls;singleton:=true
-Bundle-Version: 1.0.0.qualifier
+Bundle-Version: 0.1.0.qualifier
 Bundle-Vendor: CMU-SEI
 Automatic-Module-Name: org.osate.aadl.ls
 Bundle-RequiredExecutionEnvironment: JavaSE-21

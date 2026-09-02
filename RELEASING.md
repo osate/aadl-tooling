@@ -23,8 +23,8 @@ of truth. Bump the version in a normal commit first, then tag that commit.
 
 # 2. Tag the merged commit and push the tag.
 git switch main && git pull
-git tag osate-cli-v0.1.4
-git push origin osate-cli-v0.1.4
+git tag osate-cli-v0.1.0
+git push origin osate-cli-v0.1.0
 ```
 
 Watch it with `gh run watch`. Each workflow also accepts `workflow_dispatch`,
@@ -55,8 +55,8 @@ A `-pre` suffix on the tag publishes a pre-release; without it the release is
 stable. The version itself is identical either way:
 
 ```bash
-git tag vscode-v0.0.2-pre    # pre-release: users must opt in
-git tag vscode-v0.0.2        # stable: offered to everyone
+git tag vscode-v0.1.0-pre    # pre-release: users must opt in
+git tag vscode-v0.1.0        # stable: offered to everyone
 ```
 
 A pre-release is marked as such on the Marketplace and on Open VSX, and the

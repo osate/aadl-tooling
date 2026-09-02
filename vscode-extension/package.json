@@ -3,7 +3,7 @@
 	"displayName": "AADL2",
 	"publisher": "osate",
 	"description": "Support for AADL2 modeling",
-	"version": "0.0.2",
+	"version": "0.1.0",
 	"license": "LicenseRef-BSD-SEI",
 	"icon": "images/icon.png",
 	"repository": {

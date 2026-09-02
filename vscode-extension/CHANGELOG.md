@@ -29,6 +29,9 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+## [0.1.0] - 2026-09-02
+
+- Align the extension version with the language server and osate-cli at 0.1.0.
 - Add the AADL vector mark as the extension icon.
 - Add bus load analysis command for instance models.
 - Initial release
