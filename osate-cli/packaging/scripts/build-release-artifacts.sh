@@ -128,7 +128,17 @@ OSATE_CLI_VERSION=$(version_from_dist "$dist_dir")
 if [ -n "$expect_version" ] && [ "$expect_version" != "$OSATE_CLI_VERSION" ]; then
 	die "dist reports version $OSATE_CLI_VERSION, but --expect-version is $expect_version"
 fi
+
+# Refuse to package a CLI that cannot say which OSATE it came from. Compared against
+# the gitlink rather than the submodule's HEAD: the gitlink is the reviewed pin, and
+# it is readable here even when the submodule is not checked out.
+osate_gitlink=$(git -C "$repo_root" ls-files --stage osate2 2>/dev/null |
+	awk '$1 == "160000" { print $2 }')
+require_release_provenance "$dist_dir" "$osate_gitlink"
+
 echo "Packaging $OSATE_CLI_PACKAGE_NAME $OSATE_CLI_VERSION (from $dist_dir/osate-cli.jar)"
+echo "  language server $(provenance_from_dist "$dist_dir" ls.version) ($(provenance_from_dist "$dist_dir" ls.commit))"
+echo "  OSATE           $(provenance_from_dist "$dist_dir" osate.version) ($(provenance_from_dist "$dist_dir" osate.commit))"
 
 downloads_dir="$output_dir/downloads"
 staging_dir="$output_dir/staging"

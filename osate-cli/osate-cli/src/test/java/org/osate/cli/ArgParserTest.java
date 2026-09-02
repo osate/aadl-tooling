@@ -105,6 +105,30 @@ class ArgParserTest {
 		assertEquals("osate-cli " + Version.get(), ArgParser.versionLine());
 	}
 
+	/**
+	 * {@code --version} prints this and nothing else, so it must stay one line. The
+	 * assembled-CLI test compares that output for exact equality and the packaging
+	 * scripts parse it, so appending build provenance here would break both. Provenance
+	 * belongs in {@code versionDetail()}, which only {@code help()} prints.
+	 */
+	@Test
+	void versionLineStaysASingleLine() {
+		assertEquals(1, ArgParser.versionLine().lines().count());
+	}
+
+	@Test
+	void versionDetailReportsWhatTheCliWasBuiltFrom() {
+		var detail = ArgParser.versionDetail();
+
+		assertTrue(detail.contains("language server"), () -> detail);
+		assertTrue(detail.contains("OSATE"), () -> detail);
+		assertTrue(detail.contains(Version.languageServerVersion()), () -> detail);
+		assertTrue(detail.contains(Version.osateVersion()), () -> detail);
+		assertTrue(detail.contains(Version.abbreviate(Version.osateCommit(), 7)), () -> detail);
+		// Every line indented, so the banner stays the only flush-left line in help.
+		assertTrue(detail.lines().allMatch(line -> line.startsWith("  ")), () -> detail);
+	}
+
 	@Test
 	void helpStartsWithVersionBanner() {
 		var help = ArgParser.help();
@@ -112,6 +136,14 @@ class ArgParserTest {
 		assertEquals(ArgParser.versionLine(), help.lines().findFirst().orElseThrow());
 		assertTrue(help.contains("osate-cli -v | --version"));
 		assertTrue(ArgParser.usage().contains("osate-cli -v | --version"));
+	}
+
+	@Test
+	void helpIncludesBuildProvenanceUnderTheBanner() {
+		var lines = ArgParser.help().lines().toList();
+
+		assertEquals(ArgParser.versionLine(), lines.get(0));
+		assertEquals(ArgParser.versionDetail(), String.join("\n", lines.subList(1, 3)));
 	}
 
 	@Test

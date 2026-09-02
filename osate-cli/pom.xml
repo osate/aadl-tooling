@@ -46,6 +46,16 @@
 		     Keep it a plain release version: rpm forbids '-' in Version, so a
 		     '-SNAPSHOT' suffix would not survive packaging. -->
 		<revision>0.1.0</revision>
+		<!-- Provenance of the bundled language server and the OSATE it was built
+		     against, reported by 'osate-cli help'. Supplied by
+		     scripts/build-test-release, which is the only place that knows the
+		     osate2 gitlink and the built language-server bundle version. Left as
+		     'unknown' for a standalone reactor build so it still works; a release
+		     is checked for that value rather than trusting the default. -->
+		<aadl.ls.version>unknown</aadl.ls.version>
+		<aadl.ls.commit>unknown</aadl.ls.commit>
+		<osate.version>unknown</osate.version>
+		<osate.commit>unknown</osate.commit>
 		<maven.compiler.release>21</maven.compiler.release>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<gson.version>2.11.0</gson.version>
