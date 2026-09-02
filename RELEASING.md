@@ -31,6 +31,41 @@ Watch it with `gh run watch`. Each workflow also accepts `workflow_dispatch`,
 which builds and packages everything but creates no release — use that to
 rehearse a release before tagging.
 
+### Bumping the language server
+
+The language server is the one component whose version lives in more than one
+file, because Tycho keeps the Maven and OSGi versions in lockstep. Its
+`validate-version` check runs at `validate` with `strictVersions` on, and it
+requires `.qualifier` for a `-SNAPSHOT` version but exact equality for a release
+version. So `0.1.0` in the poms next to `0.1.0.qualifier` in a manifest fails the
+build before it compiles anything. All eight lines move together:
+
+| File | What to change |
+| --- | --- |
+| `aadl-language-server/pom.xml` | the `aadl.ls.parent` version (not the `osate2.main-pom` parent, which follows the submodule pin) |
+| `aadl-language-server/org.osate.aadl.ls/pom.xml` | `<parent>` and its own `<version>` |
+| `aadl-language-server/plugins/org.osate.aadl.ls.tests/pom.xml` | `<parent>` and its own `<version>` |
+| `aadl-language-server/releng/org.osate.aadl.ls.repository/pom.xml` | `<parent>` only; it has no `<version>` |
+| `org.osate.aadl.ls/META-INF/MANIFEST.MF` | `Bundle-Version` |
+| `plugins/org.osate.aadl.ls.tests/META-INF/MANIFEST.MF` | `Bundle-Version` |
+
+The repository-root `pom.xml` version is reported as `tooling.version` in
+`build-provenance.properties`, which is attached to the `ls-v*` release, so move it
+with the server. `vscode-extension/pom.xml` inherits from it and must be updated in
+the same commit or parent resolution breaks.
+
+### After tagging
+
+Return `main` to a development version: `-SNAPSHOT` in the poms and `.qualifier` in
+the manifests, at the next version. Development builds then carry a build
+timestamp (`org.osate.aadl.ls_0.2.0.v20260902-1320.jar`), which is what lets p2 and
+Eclipse tell one local rebuild from the next. A plain release version left in the
+tree makes every rebuild look identical to a p2 cache.
+
+`osate-cli` and the extension work differently on purpose: they keep a plain
+release version in the tree — rpm forbids `-` in a version, and VS Code extension
+versions must stay `major.minor.patch` — and move it only when they release.
+
 ## What each release produces
 
 **`osate-cli-v*`** — [`release-osate-cli.yml`](.github/workflows/release-osate-cli.yml)
