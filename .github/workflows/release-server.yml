@@ -9,12 +9,9 @@ name: Release language server
 on:
   push:
     tags: ["ls-v*"]
+  # Dispatching is inherently a dry run: every publish step is gated on the ref
+  # being a tag, so a manual run builds and packages but releases nothing.
   workflow_dispatch:
-    inputs:
-      dry-run:
-        description: Build without creating a release.
-        type: boolean
-        default: true
 
 permissions:
   contents: read
@@ -82,14 +79,26 @@ jobs:
           name: language-server-p2
           path: dist
 
-      - name: Inspect the payload
+      # Locate the assets by searching, not by guessing paths. upload-artifact
+      # roots the archive at the least common ancestor of the uploaded paths, so
+      # the zip sits several directories down and its depth changes if that set
+      # ever changes.
+      - name: Collect the release assets
+        id: assets
         run: |
           find dist -type f | sort
-          if ! ls dist/aadl-language-server/releng/org.osate.aadl.ls.repository/target/*.zip \
-                 dist/*.zip >/dev/null 2>&1; then
+
+          zips=$(find dist -type f -name '*.zip' | wc -l | tr -d ' ')
+          if [ "$zips" -eq 0 ]; then
             echo "No p2 repository archive in the artifact." >&2
             exit 1
           fi
+          echo "$zips p2 archive(s) found."
+
+          # NUL-delimited into a file so the next step gets the same list without
+          # re-deriving it, and paths with spaces survive.
+          find dist -type f \( -name '*.zip' -o -name 'build-provenance.properties' \) \
+            -print0 > /tmp/release-assets
 
       - name: Create the GitHub release
         if: github.ref_type == 'tag'
@@ -99,7 +108,7 @@ jobs:
           assets=()
           while IFS= read -r -d '' f; do
             assets+=("$f")
-          done < <(find dist -type f \( -name '*.zip' -o -name 'build-provenance.properties' \) -print0)
+          done < /tmp/release-assets
           if [ ${#assets[@]} -eq 0 ]; then
             echo "No release assets found." >&2
             exit 1

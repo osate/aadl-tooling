@@ -61,6 +61,7 @@ jobs:
     timeout-minutes: 5
     permissions:
       actions: write
+      pull-requests: read
     env:
       GH_TOKEN: ${{ github.token }}
       OSATE_KEEP: ${{ needs.build.outputs.osate-cache-key }}
@@ -94,8 +95,51 @@ jobs:
           prune "osate-${{ runner.os }}-" "$OSATE_KEEP"
           prune "maven-${{ runner.os }}-" "$MAVEN_KEEP"
 
-          echo "### Caches after pruning" >> "$GITHUB_STEP_SUMMARY"
-          gh cache list --repo "$GITHUB_REPOSITORY" --limit 30 \
-            --json key,sizeInBytes \
-            --jq '.[] | "- \(.sizeInBytes / 1048576 | floor) MB — \(.key)"' \
-            >> "$GITHUB_STEP_SUMMARY"
+          # Pull-request caches live on their own refs, which the prune above
+          # deliberately does not touch, and they are the bulk of the usage: one
+          # merged pull request left 2 GB behind. They become garbage the moment
+          # the pull request stops being open, but nothing reclaims them until the
+          # 7-day timeout or the 10 GB limit starts evicting entries we want.
+          echo "::group::closed pull-request caches"
+          gh cache list --repo "$GITHUB_REPOSITORY" --limit 100 \
+            --json id,ref,key,sizeInBytes \
+            --jq '.[] | select(.ref | startswith("refs/pull/")) | "\(.id)\t\(.ref)\t\(.sizeInBytes)\t\(.key)"' \
+            > /tmp/pr-caches || true
+
+          if [ ! -s /tmp/pr-caches ]; then
+            echo "No pull-request caches."
+          else
+            while IFS="$(printf '\t')" read -r id ref size key; do
+              number=${ref#refs/pull/}
+              number=${number%%/*}
+              state=$(gh pr view "$number" --repo "$GITHUB_REPOSITORY" --json state --jq .state 2>/dev/null || echo UNKNOWN)
+              case "$state" in
+              OPEN)
+                echo "Keeping $key on $ref (#$number is open)"
+                ;;
+              MERGED | CLOSED)
+                echo "Deleting $key on $ref (#$number is $state, $size bytes)"
+                gh cache delete --repo "$GITHUB_REPOSITORY" "$id" || true
+                ;;
+              *)
+                echo "Keeping $key on $ref (could not resolve #$number)"
+                ;;
+              esac
+            done < /tmp/pr-caches
+          fi
+          echo "::endgroup::"
+
+          # The total is the number that matters: GitHub starts evicting by least
+          # recent use once a repository passes 10 GB, and the entry it takes is
+          # not necessarily one we can cheaply rebuild.
+          gh cache list --repo "$GITHUB_REPOSITORY" --limit 100 \
+            --json key,ref,sizeInBytes > /tmp/caches-after
+
+          {
+            total=$(jq '[.[].sizeInBytes] | add // 0' /tmp/caches-after)
+            printf '### Caches after pruning — %d MB of 10240 MB\n\n' "$((total / 1048576))"
+            echo "| Size | Ref | Key |"
+            echo "| --- | --- | --- |"
+            jq -r 'sort_by(-.sizeInBytes)[] | "| \(.sizeInBytes / 1048576 | floor) MB | \(.ref) | `\(.key)` |"' \
+              /tmp/caches-after
+          } >> "$GITHUB_STEP_SUMMARY"
