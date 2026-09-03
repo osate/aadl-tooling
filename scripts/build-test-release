@@ -182,8 +182,11 @@ echo "Building language server"
 # Two invocations, not one root-reactor build: the extension consumes the server
 # plug-ins through the server/aadl/lib symlink, which Maven cannot see, so a
 # parallel reactor is free to package the VSIX before those plug-ins exist.
+#
+# Single-threaded from here down. Only the OSATE build above is big enough to
+# earn -T6; these reactors are small, and a serial build keeps their output
+# readable and their module ordering exactly as declared.
 mvn \
-	-T6 \
 	-f "${repo_root}/aadl-language-server/pom.xml" \
 	-Dtycho.localArtifacts=ignore \
 	clean verify
@@ -200,7 +203,6 @@ else
 	fi
 
 	mvn \
-		-T6 \
 		-f "${repo_root}/vscode-extension/pom.xml" \
 		-Dtycho.localArtifacts=ignore \
 		"${extension_args[@]+"${extension_args[@]}"}" \
@@ -250,7 +252,6 @@ else
 	fi
 
 	mvn \
-		-T6 \
 		-f "${repo_root}/osate-cli/pom.xml" \
 		-Daadl.ls.version="${ls_version}" \
 		-Daadl.ls.commit="${tooling_commit}" \
