@@ -224,19 +224,17 @@ public final class WorkspaceServerMain {
 		var pluginsDir = locatePluginsDir();
 		var selfJar = selfJarPath();
 		var urls = new ArrayList<URL>();
-		var hasAntlr44 = false;
 		try (var stream = Files.newDirectoryStream(pluginsDir, "*.jar")) {
 			for (var jar : stream) {
 				// Don't expose our own classes (and our private Gson copy) to the LS classloader.
 				if (jar.equals(selfJar) || !isServerRuntimeJar(jar)) {
 					continue;
 				}
-				hasAntlr44 |= jar.getFileName().toString().equals("antlr-runtime-4.4.jar");
 				urls.add(jar.toUri().toURL());
 			}
 		}
-		if (!hasAntlr44) {
-			throw new IllegalStateException("AADL language server is missing antlr-runtime-4.4.jar");
+		if (urls.isEmpty()) {
+			throw new IllegalStateException("No AADL language server plugin jars found in " + pluginsDir);
 		}
 		System.err.println("[osate-workspace-server] loaded " + urls.size() + " plugin jars from " + pluginsDir);
 		return new URLClassLoader("aadl-server", urls.toArray(URL[]::new),
