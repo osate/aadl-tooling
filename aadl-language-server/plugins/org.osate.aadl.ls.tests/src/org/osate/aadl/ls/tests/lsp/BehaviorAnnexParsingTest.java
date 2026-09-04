@@ -24,6 +24,7 @@
 package org.osate.aadl.ls.tests.lsp;
 
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertTrue;
 
 import java.util.List;
 import java.util.Map;
@@ -32,10 +33,60 @@ import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DiagnosticSeverity;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
+import org.eclipse.emf.common.util.URI;
+import org.eclipse.xtext.ide.server.contentassist.ContentAssistService;
 import org.junit.Test;
 import org.osate.aadl.ls.AadlLanguageServer;
+import org.osate.aadl.ls.services.EmbeddedBehaviorAnnexContentAssistService;
 
 public class BehaviorAnnexParsingTest extends AbstractAadlLanguageServerTest {
+
+	@Test
+	public void referenceCompletionIncludesBehaviorAndClassifierMembers() {
+		var provider = resourceServerProviderRegistry
+				.getResourceServiceProvider(URI.createFileURI("/behavior-annex-completion.aadl"));
+		assertTrue(provider.get(ContentAssistService.class) instanceof EmbeddedBehaviorAnnexContentAssistService);
+		var source = """
+				package behavior_annex_completion
+				public
+					with Base_Types;
+
+					system s
+						features
+							input: in event data port Base_Types::Integer;
+					end s;
+
+					system implementation s.i
+						subcomponents
+							storage: data Base_Types::Integer;
+						annex behavior_specification {**
+							variables
+								counter: Base_Types::Integer;
+							states
+								idle: initial state;
+								running: final state;
+							transitions
+								start: idle -[]-> running {
+									counter := input
+								};
+						**};
+					end s.i;
+				end behavior_annex_completion;
+				""";
+		var cursorOffset = source.indexOf("counter := input") + "counter := in".length();
+		var beforeCursor = source.substring(0, cursorOffset);
+		testCompletion(configuration -> {
+			configuration.setFilePath("behavior-annex-completion.aadl");
+			configuration.setModel(source);
+			configuration.setLine((int) beforeCursor.chars().filter(character -> character == '\n').count());
+			configuration.setColumn(cursorOffset - beforeCursor.lastIndexOf('\n') - 1);
+			configuration.setAssertCompletionList(completions -> {
+				var labels = completions.getItems().stream().map(item -> item.getLabel()).toList();
+				assertTrue(labels.toString(), labels.contains("input"));
+				assertTrue(labels.toString(), !labels.contains("package"));
+			});
+		});
+	}
 
 	@Test
 	public void reservedTransitionNameAfterValidTransitionProducesDiagnostic() {
