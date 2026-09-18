@@ -87,3 +87,8 @@ This repository is licensed per directory: the language server is under the
 Eclipse Public License 2.0, and the VS Code extension and `osate-cli` are under
 a BSD (SEI)-style license. See [LICENSE.md](LICENSE.md) for the full breakdown
 and per-module license and copyright files.
+
+## AI Usage
+
+Some of the code in this software was created with the assistance of AI
+coding agents.
