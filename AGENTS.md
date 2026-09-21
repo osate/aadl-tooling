@@ -64,7 +64,8 @@ the VSIX before those plug-ins exist.
 Important outputs:
 
 - `aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/`
-- `vscode-extension/aadl2-*.vsix`
+- `vscode-extension/aadl2-<platform>-<version>.vsix` (host platform by default;
+  `--extension-targets all` builds every published platform)
 - `osate-cli/dist/target/dist/`
 
 Run Maven/Tycho builds, CLI integration tests, VS Code integration tests, and
@@ -126,6 +127,12 @@ owns the OSATE cache and delegates the rest to `scripts/build-test-release`;
   build and a VSIX that silently ships no server or a stale one.
 - Keep the plug-in exclusion lists in `osate-cli/dist/pom.xml` and
   `vscode-extension/.vscodeignore` synchronized.
+- Both deliverables bundle an Eclipse Temurin JRE through
+  `scripts/lib/temurin.sh`. The VS Code extension runs that runtime and nothing
+  else, so every VSIX is platform-specific: `vsce package --target` produces one
+  package per platform and no universal fallback is published. A build that does
+  not stage a runtime cannot produce a working package, which is why the
+  packaging script, not Maven, drives the per-target loop.
 - The CLI workspace server loads language-server plug-ins from sibling JARs
   using an isolated `URLClassLoader`. Do not shade it or nest the plug-in JARs.
 - Protocol-visible command changes may require coordinated updates to the

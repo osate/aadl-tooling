@@ -32,11 +32,17 @@ plugins_dir="${repo_root}/aadl-language-server/releng/org.osate.aadl.ls.reposito
 extension_dir="${repo_root}/vscode-extension"
 provenance_dir="${repo_root}/target"
 
+# For TEMURIN_FEATURE_VERSION, so the bundled runtime recorded in the provenance
+# file comes from the same place the packaging scripts read it from.
+# shellcheck source=lib/temurin.sh
+source "${repo_root}/scripts/lib/temurin.sh"
+
 skip_osate=false
 skip_extension=false
 skip_extension_tests=false
 skip_cli=false
 extension_pre_release=false
+extension_targets=host
 
 usage() {
 	cat <<'EOF'
@@ -62,6 +68,12 @@ Options:
                            the package manifest and refuses to publish a package
                            as a pre-release unless it was built as one, so this
                            has to be decided at build time.
+  --extension-targets <t>  Which platforms to package the extension for: "host"
+                           (default), "all", or a comma-separated list of VS Code
+                           platform ids. Each VSIX bundles a platform-specific
+                           Java runtime, so there is no universal package; a
+                           release needs "all", and everything else wants the
+                           host alone.
   -h, --help               Show this help.
 EOF
 }
@@ -83,6 +95,14 @@ while [[ $# -gt 0 ]]; do
 		;;
 	--extension-pre-release)
 		extension_pre_release=true
+		;;
+	--extension-targets)
+		if [[ $# -lt 2 ]]; then
+			echo "--extension-targets requires a value" >&2
+			exit 2
+		fi
+		extension_targets=$2
+		shift
 		;;
 	-h | --help)
 		usage
@@ -194,12 +214,12 @@ mvn \
 if [[ "${skip_extension}" == true ]]; then
 	echo "Skipping VS Code extension"
 else
-	extension_args=()
+	extension_args=(-Dvsce.package.targets="${extension_targets}")
 	if [[ "${extension_pre_release}" == true ]]; then
-		echo "Building VS Code extension (pre-release)"
+		echo "Building VS Code extension (pre-release) for ${extension_targets}"
 		extension_args+=(-Dvsce.package.script=package:pre-release)
 	else
-		echo "Building VS Code extension"
+		echo "Building VS Code extension for ${extension_targets}"
 	fi
 
 	mvn \
@@ -285,6 +305,71 @@ if [[ "${antlr_osgi_count}" != "1" || "${antlr3_count}" != "1" ]]; then
 	exit 1
 fi
 
+# Every VSIX must carry a Java runtime for its own platform, and the host's must
+# actually run. The runtime reaches the VSIX through the same kind of symlink as
+# the server plug-ins, so nothing but looking inside the package proves it landed.
+if [[ "${skip_extension}" == false ]]; then
+	host_target=$("${extension_dir}/packaging/scripts/stage-runtime" --host-target)
+	shopt -s nullglob
+	vsix_files=("${extension_dir}"/aadl2-*.vsix)
+	shopt -u nullglob
+
+	if [[ ${#vsix_files[@]} -eq 0 ]]; then
+		echo "No VSIX was produced in ${extension_dir}." >&2
+		exit 1
+	fi
+
+	for vsix in "${vsix_files[@]}"; do
+		vsix_name=$(basename "${vsix}")
+		vsix_target=${vsix_name#aadl2-}
+		vsix_target=${vsix_target%-*}
+
+		java_entry='extension/runtime/bin/java'
+		java_pattern='extension/runtime/bin/java$'
+		if [[ "${vsix_target}" == win32-* ]]; then
+			java_entry='extension/runtime/bin/java.exe'
+			java_pattern='extension/runtime/bin/java\.exe$'
+		fi
+
+		# grep -c rather than -q: -q closes the pipe on the first match, and the
+		# SIGPIPE that gives unzip fails the whole pipeline under pipefail.
+		java_count=$(unzip -l "${vsix}" | grep -cE "${java_pattern}" || true)
+		if [[ "${java_count}" -eq 0 ]]; then
+			echo "${vsix_name} has no bundled Java runtime at ${java_entry}." >&2
+			exit 1
+		fi
+
+		jar_count=$(unzip -l "${vsix}" | grep -c 'extension/server/aadl/lib/.*\.jar' || true)
+		if [[ "${jar_count}" -lt 100 ]]; then
+			echo "${vsix_name} holds only ${jar_count} server plug-ins; the symlink did not resolve." >&2
+			exit 1
+		fi
+
+		echo "  ${vsix_name}: ${jar_count} server plug-ins, bundled ${java_entry##*/}"
+	done
+
+	# The staged runtime is the one the extension tests just ran against and the
+	# one the host's VSIX contains, so running it here is the end of that chain.
+	staged_java="${extension_dir}/runtime/bin/java"
+	if [[ ! -x "${staged_java}" ]]; then
+		echo "No executable runtime staged at ${staged_java} for ${host_target}." >&2
+		exit 1
+	fi
+	# Cleared the same three variables the extension clears before launching the
+	# server, so this reports the runtime rather than whatever the machine injects.
+	bundled_java_version=$(
+		env -u JAVA_TOOL_OPTIONS -u _JAVA_OPTIONS -u JDK_JAVA_OPTIONS \
+			"${staged_java}" -version 2>&1 |
+			sed -n 's/.*version "\([^"]*\)".*/\1/p' |
+			head -n 1
+	)
+	if [[ -z "${bundled_java_version}" ]]; then
+		echo "The staged runtime at ${staged_java} did not report a version." >&2
+		exit 1
+	fi
+	echo "  staged runtime for ${host_target}: Java ${bundled_java_version}"
+fi
+
 tooling_version=$(mvn -q -f "${repo_root}/pom.xml" help:evaluate \
 	-Dexpression=project.version -DforceStdout)
 cli_version=$(mvn -q -f "${repo_root}/osate-cli/pom.xml" help:evaluate \
@@ -298,13 +383,25 @@ mkdir -p "${provenance_dir}"
 	printf 'osate.gitlink=%s\n' "${expected_osate_sha}"
 	printf 'osate.version=%s\n' "${osate_version}"
 	printf 'cli.version=%s\n' "${cli_version}"
+	# Which platforms were packaged, and the runtime they carry. The bundled JRE is
+	# part of what shipped, so it belongs in the record of what a release was built
+	# from; "latest GA" floats, which is exactly why the feature version alone is
+	# not enough to reconstruct a build.
+	if [[ "${skip_extension}" == true ]]; then
+		printf 'extension.targets=none\n'
+	else
+		printf 'extension.targets=%s\n' "${extension_targets}"
+		printf 'java.vendor=Eclipse Temurin\n'
+		printf 'java.feature.version=%s\n' "${TEMURIN_FEATURE_VERSION}"
+		printf 'java.runtime.version=%s\n' "${bundled_java_version}"
+	fi
 	printf 'build.timestamp=%s\n' "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 } > "${provenance_dir}/build-provenance.properties"
 
 echo "Language-server repository:"
 echo "  ${repo_root}/aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository"
-echo "VS Code extension:"
-echo "  ${repo_root}/vscode-extension/aadl2-*.vsix"
+echo "VS Code extension (one platform-specific package per target):"
+echo "  ${repo_root}/vscode-extension/aadl2-<target>-<version>.vsix"
 echo "CLI distribution:"
 echo "  ${repo_root}/osate-cli/dist/target/dist"
 echo "Build provenance:"

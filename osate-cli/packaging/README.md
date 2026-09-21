@@ -101,6 +101,11 @@ writes tarballs under:
 osate-cli/packaging/target/artifacts/
 ```
 
+The download, checksum verification against Adoptium's published digest, and
+unpacking live in `scripts/lib/temurin.sh`, shared with VS Code extension
+packaging, which bundles the same runtimes. `TEMURIN_FEATURE_VERSION` in
+`metadata.env` still pins the version used here.
+
 If `nfpm` is on `PATH`, Linux `.deb` and `.rpm` packages are also built. Use
 `--nfpm` to require nFPM, or `--no-nfpm` to skip native Linux packages.
 

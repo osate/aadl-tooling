@@ -45,6 +45,13 @@
 		     as a pre-release unless it was built as one, so the choice has to be made
 		     here rather than at publish time. -->
 		<vsce.package.script>package</vsce.package.script>
+		<!-- Which platforms to package. Every VSIX bundles a platform-specific Java
+		     runtime, so there is no universal package; the default builds the host's
+		     alone, which is what a developer and a pull-request build need. Set to
+		     "all", or to a comma-separated list of VS Code platform ids, for a
+		     release. Maven cannot loop, so the value is handed to the packaging
+		     script rather than turned into vsce arguments here. -->
+		<vsce.package.targets>host</vsce.package.targets>
 		<server.plugins.dir>${project.basedir}/../aadl-language-server/releng/org.osate.aadl.ls.repository/target/repository/plugins</server.plugins.dir>
 	</properties>
 
@@ -130,6 +137,12 @@
 						<phase>package</phase>
 						<configuration>
 							<arguments>run ${vsce.package.script}</arguments>
+							<!-- An environment variable rather than an npm argument: npm
+							     would have to forward it through two script layers, and the
+							     packaging script needs the list before it calls vsce. -->
+							<environmentVariables>
+								<AADL_VSIX_TARGETS>${vsce.package.targets}</AADL_VSIX_TARGETS>
+							</environmentVariables>
 						</configuration>
 					</execution>
 				</executions>
@@ -151,6 +164,14 @@
 						<fileset>
 							<directory>${project.basedir}/out</directory>
 						</fileset>
+						<!--
+						runtime/ is deliberately not cleaned. It is a symlink into the JRE
+						cache outside this module, and maven-clean deletes the contents of
+						the link's target even with followSymlinks=false, because here the
+						fileset directory is itself the link. Packaging replaces the link
+						whenever it stages a target, so there is nothing to gain here and an
+						unpacked JRE to lose.
+						-->
 						<fileset>
 							<directory>${project.basedir}</directory>
 							<includes>

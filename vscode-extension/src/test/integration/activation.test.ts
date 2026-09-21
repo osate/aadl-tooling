@@ -26,24 +26,13 @@ import * as vscode from 'vscode';
 
 const EXTENSION_ID = 'osate.aadl2';
 
-interface RedHatJavaApi {
-	javaRequirement?: {
-		// eslint-disable-next-line @typescript-eslint/naming-convention
-		tooling_jre?: string;
-	};
-}
-
 interface AadlExtensionApi {
-	javaRuntime: {
+	javaRuntime?: {
 		executable: string;
 		home: string;
 		source: string;
 		majorVersion: number;
 	};
-}
-
-function redHatJavaAvailable(): boolean {
-	return !!vscode.extensions.getExtension('redhat.java');
 }
 
 async function waitForActivation(timeoutMs: number): Promise<boolean> {
@@ -150,11 +139,10 @@ suite('extension auto-activation on aadl files', function () {
 
 	let aadlFile: string;
 
+	// Nothing gates this suite any more. It used to skip itself when redhat.java
+	// was absent, which meant a silent pass; the runtime now ships in the
+	// extension, so a missing or unusable one is a failure.
 	suiteSetup(function () {
-		if (!redHatJavaAvailable()) {
-			console.log('redhat.java not installed in this VS Code profile — skipping activation tests');
-			this.skip();
-		}
 		const workspaceFolder = vscode.workspace.workspaceFolders?.[0];
 		assert.ok(workspaceFolder, 'integration test workspace is not open');
 		aadlFile = path.join(workspaceFolder.uri.fsPath, 'TestProject', 'sample.aadl');
@@ -175,28 +163,28 @@ suite('extension auto-activation on aadl files', function () {
 		assert.strictEqual(activated, true, 'extension did not activate within 60s');
 	});
 
-	test('uses the Red Hat tooling JRE and requires Java 21 or newer', async () => {
-		const redHatExtension = vscode.extensions.getExtension<RedHatJavaApi>('redhat.java');
-		assert.ok(redHatExtension, 'redhat.java not found');
-		const redHatApi = redHatExtension!.isActive
-			? redHatExtension!.exports
-			: await redHatExtension!.activate();
-		const toolingJre = redHatApi?.javaRequirement?.tooling_jre;
-		assert.ok(toolingJre, 'redhat.java did not provide a tooling JRE');
-
+	test('runs the bundled Java runtime and nothing installed on the machine', async () => {
 		const aadlExtension = vscode.extensions.getExtension<AadlExtensionApi>(EXTENSION_ID);
 		assert.ok(aadlExtension?.isActive, 'AADL extension is not active');
 		const runtime = aadlExtension!.exports.javaRuntime;
+		assert.ok(runtime, 'the language server did not start, so no runtime was resolved');
+
+		const expectedHome = path.join(aadlExtension!.extensionPath, 'runtime');
 		const expectedExecutable = path.join(
-			toolingJre!,
+			expectedHome,
 			'bin',
 			process.platform === 'win32' ? 'java.exe' : 'java'
 		);
 
-		assert.strictEqual(runtime.source, 'Red Hat Java extension');
-		assert.strictEqual(runtime.home, toolingJre);
-		assert.strictEqual(runtime.executable, expectedExecutable);
-		assert.ok(runtime.majorVersion >= 21, `expected Java 21+, got Java ${runtime.majorVersion}`);
+		assert.strictEqual(runtime!.source, 'bundled Java runtime');
+		assert.strictEqual(runtime!.home, expectedHome);
+		assert.strictEqual(runtime!.executable, expectedExecutable);
+		assert.ok(runtime!.majorVersion >= 21, `expected Java 21+, got Java ${runtime!.majorVersion}`);
+	});
+
+	test('no Java extension is involved', () => {
+		assert.strictEqual(vscode.extensions.getExtension('redhat.java'), undefined,
+			'the suite runs with --disable-extensions; a redhat.java here means the isolation broke');
 	});
 
 	test('custom commands are registered after activation', async () => {
