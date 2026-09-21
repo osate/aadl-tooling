@@ -32,9 +32,6 @@
 	"activationEvents": [
 		"onLanguage:aadl2"
 	],
-	"extensionDependencies": [
-		"redhat.java"
-	],
 	"main": "./out/extension.js",
 	"contributes": {
 		"languages": [
@@ -196,12 +193,13 @@
 		"compile": "node esbuild.js",
 		"watch": "node esbuild.js --watch",
 		"package-bundle": "node esbuild.js --production",
-		"package": "npm run package-bundle && vsce package --no-dependencies --follow-symlinks",
-		"package:pre-release": "npm run package-bundle && vsce package --no-dependencies --follow-symlinks --pre-release",
+		"stage-runtime": "packaging/scripts/stage-runtime",
+		"package": "npm run package-bundle && packaging/scripts/package-vsix",
+		"package:pre-release": "npm run package-bundle && packaging/scripts/package-vsix --pre-release",
 		"check-types": "tsc -b ./ --noEmit",
 		"compile-tests": "tsc -p tsconfig.test.json",
 		"test:unit": "npm run compile-tests && mocha --ui tdd \"out/test/unit/**/*.test.js\"",
-		"test:integration": "npm run compile-tests && node out/test/runIntegrationTests.js",
+		"test:integration": "npm run compile-tests && npm run stage-runtime && node out/test/runIntegrationTests.js",
 		"test": "npm run test:unit && npm run test:integration",
 		"lint": "eslint src --ext ts"
 	},

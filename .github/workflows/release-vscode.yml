@@ -76,12 +76,18 @@ jobs:
       # Decided at build time: vsce refuses to publish a package as a pre-release
       # unless the marker is already in its manifest.
       extension-pre-release: ${{ needs.verify-version.outputs.pre-release == 'true' }}
+      # Every package carries its own platform's Java runtime, so a release has to
+      # build all of them. Clients are offered the package matching their platform
+      # and nothing at all on a platform we do not build.
+      extension-targets: all
 
   publish:
     name: Publish
     needs: [verify-version, build]
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    # Six platform packages of ~125 MB each are uploaded twice over, to the
+    # Marketplace and to Open VSX.
+    timeout-minutes: 45
     permissions:
       contents: write
     env:
@@ -104,38 +110,69 @@ jobs:
           name: vscode-extension
           path: dist
 
-      - name: Check the VSIX
+      - name: Check the VSIX set
         run: |
-          vsix="dist/aadl2-${VERSION}.vsix"
-          if [ ! -f "$vsix" ]; then
-            echo "Expected $vsix; got:" >&2
-            ls -l dist >&2
-            exit 1
-          fi
-          # The server plug-ins reach the VSIX through a symlink that vsce
-          # dereferences. An empty server/aadl/lib means the package is useless.
-          count=$(unzip -l "$vsix" | grep -c 'extension/server/aadl/lib/.*\.jar')
-          echo "$count server plug-in jars in the VSIX"
-          if [ "$count" -lt 100 ]; then
-            echo "Too few server plug-ins; the symlink did not resolve." >&2
-            exit 1
-          fi
+          # Every supported platform must be present before anything is published.
+          # Marketplace versions are immutable, so publishing some targets and
+          # failing on the rest would leave platforms permanently on different
+          # versions of the extension.
+          targets=$(vscode-extension/packaging/scripts/stage-runtime --all-targets)
+          paths=()
+          for target in $targets; do
+            vsix="dist/aadl2-${target}-${VERSION}.vsix"
+            if [ ! -f "$vsix" ]; then
+              echo "Expected $vsix; got:" >&2
+              ls -l dist >&2
+              exit 1
+            fi
 
-          # The marker is baked in at package time, so confirm the package matches
-          # what the tag asked for. vsce would reject a mismatch in one direction
-          # and silently publish a pre-release as stable in the other.
-          if unzip -p "$vsix" extension.vsixmanifest | grep -q 'Microsoft.VisualStudio.Code.PreRelease'; then
-            marked=true
-          else
-            marked=false
-          fi
-          echo "packaged as pre-release: $marked (tag asked for $PRE_RELEASE)"
-          if [ "$marked" != "$PRE_RELEASE" ]; then
-            echo "VSIX pre-release marker does not match the tag." >&2
-            exit 1
-          fi
+            # The server plug-ins and the bundled runtime both reach the VSIX
+            # through symlinks that vsce dereferences. Either one missing makes the
+            # package useless, and neither shows up as a packaging failure.
+            jars=$(unzip -l "$vsix" | grep -c 'extension/server/aadl/lib/.*\.jar' || true)
+            if [ "$jars" -lt 100 ]; then
+              echo "$vsix holds only $jars server plug-ins; the symlink did not resolve." >&2
+              exit 1
+            fi
 
-          echo "VSIX=$vsix" >> "$GITHUB_ENV"
+            case "$target" in
+            win32-*) java_entry='extension/runtime/bin/java\.exe$' ;;
+            *) java_entry='extension/runtime/bin/java$' ;;
+            esac
+            # grep -c, not -q: -q closes the pipe and the resulting SIGPIPE fails
+            # unzip, which under pipefail fails the step.
+            if [ "$(unzip -l "$vsix" | grep -cE "$java_entry" || true)" -eq 0 ]; then
+              echo "$vsix has no bundled Java runtime." >&2
+              exit 1
+            fi
+
+            manifest=$(unzip -p "$vsix" extension.vsixmanifest)
+
+            # A package built for the wrong platform would install on clients that
+            # cannot run its runtime.
+            if ! printf '%s' "$manifest" | grep -q "TargetPlatform=\"$target\""; then
+              echo "$vsix is not marked for $target." >&2
+              exit 1
+            fi
+
+            # The marker is baked in at package time, so confirm the package matches
+            # what the tag asked for. vsce would reject a mismatch in one direction
+            # and silently publish a pre-release as stable in the other.
+            if printf '%s' "$manifest" | grep -q 'Microsoft.VisualStudio.Code.PreRelease'; then
+              marked=true
+            else
+              marked=false
+            fi
+            if [ "$marked" != "$PRE_RELEASE" ]; then
+              echo "$vsix pre-release marker is $marked; the tag asked for $PRE_RELEASE." >&2
+              exit 1
+            fi
+
+            echo "$vsix: $jars server plug-ins, bundled runtime, pre-release=$marked"
+            paths+=("$vsix")
+          done
+
+          echo "VSIX_PATHS=${paths[*]}" >> "$GITHUB_ENV"
 
       - name: Create the GitHub release
         if: github.ref_type == 'tag'
@@ -146,12 +183,13 @@ jobs:
           if [ "$PRE_RELEASE" = "true" ]; then
             args+=(--prerelease)
           fi
+          # shellcheck disable=SC2086 # the paths are a deliberate word list
           gh release create "$GITHUB_REF_NAME" \
             --repo "$GITHUB_REPOSITORY" \
             --title "AADL2 VS Code extension $VERSION" \
             --generate-notes \
             "${args[@]+"${args[@]}"}" \
-            "$VSIX"
+            $VSIX_PATHS
 
       - name: Install publishing tools
         if: github.ref_type == 'tag' && (env.VSCE_PAT != '' || env.OVSX_PAT != '')
@@ -168,7 +206,15 @@ jobs:
           if [ "$PRE_RELEASE" = "true" ]; then
             args+=(--pre-release)
           fi
-          npx --no-install vsce publish --packagePath "../$VSIX" "${args[@]+"${args[@]}"}"
+          paths=()
+          for vsix in $VSIX_PATHS; do
+            paths+=("../$vsix")
+          done
+          # One invocation with every package: --packagePath is variadic, and
+          # publishing the platforms together is the closest thing to an atomic
+          # release the Marketplace offers. --pre-release comes first because the
+          # variadic option would otherwise swallow it.
+          npx --no-install vsce publish "${args[@]+"${args[@]}"}" --packagePath "${paths[@]}"
 
       # Requires the "osate" namespace claimed at open-vsx.org and its token
       # stored as OVSX_PAT.
@@ -182,7 +228,26 @@ jobs:
           if [ "$PRE_RELEASE" = "true" ]; then
             args+=(--pre-release)
           fi
-          npx --yes ovsx publish "../$VSIX" --pat "$OVSX_PAT" "${args[@]+"${args[@]}"}"
+          paths=()
+          for vsix in $VSIX_PATHS; do
+            paths+=("../$vsix")
+          done
+          # Retried per package: six ~125 MB uploads is the flakiest step in this
+          # workflow, and a re-run of the whole job cannot republish what already
+          # landed, because a published version is permanent.
+          for path in "${paths[@]}"; do
+            for attempt in 1 2 3; do
+              if npx --yes ovsx publish "$path" --pat "$OVSX_PAT" "${args[@]+"${args[@]}"}"; then
+                break
+              fi
+              if [ "$attempt" = 3 ]; then
+                echo "Open VSX publish failed for $path." >&2
+                exit 1
+              fi
+              echo "Retrying $path in 30s"
+              sleep 30
+            done
+          done
 
       - name: Note skipped publications
         if: github.ref_type == 'tag'

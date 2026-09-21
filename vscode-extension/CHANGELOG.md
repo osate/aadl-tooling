@@ -29,6 +29,14 @@ Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how 
 
 ## [Unreleased]
 
+- Bundle an Eclipse Temurin 21 JRE and run the language server with it. The Red
+  Hat Java extension is no longer required or used, and no Java installation on
+  the machine is consulted.
+- Publish one package per platform: macOS x64/arm64, Linux x64/arm64, and Windows
+  x64/arm64. The Marketplace installs the matching one automatically; an
+  installation from a downloaded VSIX has to match the platform. Alpine Linux and
+  32-bit ARM are not supported.
+
 ## [0.1.0] - 2026-09-02
 
 - Align the extension version with the language server and osate-cli at 0.1.0.

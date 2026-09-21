@@ -1,0 +1,128 @@
+#!/usr/bin/env bash
+# VSCode extension for AADL
+#
+# Copyright 2026 Carnegie Mellon University.
+#
+# NO WARRANTY. THIS CARNEGIE MELLON UNIVERSITY AND SOFTWARE ENGINEERING INSTITUTE MATERIAL IS
+# FURNISHED ON AN "AS-IS" BASIS. CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND,
+# EITHER EXPRESSED OR IMPLIED, AS TO ANY MATTER INCLUDING, BUT NOT LIMITED TO, WARRANTY OF
+# FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY, OR RESULTS OBTAINED FROM USE OF THE
+# MATERIAL. CARNEGIE MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT TO
+# FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
+#
+# Licensed under a BSD (SEI)-style license, please see LICENSE.txt
+# or contact permission@sei.cmu.edu for full terms.
+#
+# [DISTRIBUTION STATEMENT A] This material has been approved for public release and unlimited
+# distribution.  Please see Copyright notice for non-US Government use and distribution.
+#
+# This Software includes and/or makes use of Third-Party Software each subject to its own license.
+#
+# DM26-0821
+
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+extension_dir=$(cd "$script_dir/../.." && pwd)
+stage_runtime="$script_dir/stage-runtime"
+
+die() {
+	echo "error: $*" >&2
+	exit 1
+}
+
+usage() {
+	cat <<EOF
+usage: $(basename "$0") [--pre-release] [--target <id>]...
+
+Packages one VSIX per target, each carrying that target's bundled Java runtime.
+Because the runtime is platform-specific there is no universal package: every
+VSIX is built with 'vsce package --target' and named aadl2-<target>-<version>.vsix.
+
+With no --target, packages for the host alone, which is what a local build and a
+pull-request build want. Targets may also be given in AADL_VSIX_TARGETS as a
+comma- or space-separated list, or the word 'all'; Maven passes the value of
+-Dvsce.package.targets that way.
+
+Options:
+  --pre-release   Mark the package as a pre-release. vsce writes this into the
+                  manifest and refuses to publish a package as a pre-release
+                  unless it was built as one, so it cannot be added later.
+  --target <id>   Target to package. Repeatable.
+  -h, --help      Show this help.
+EOF
+}
+
+pre_release=()
+targets=()
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--pre-release)
+		pre_release=(--pre-release)
+		;;
+	--target)
+		[ $# -ge 2 ] || die "--target requires a value"
+		targets+=("$2")
+		shift
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	*)
+		echo "unknown option: $1" >&2
+		usage >&2
+		exit 2
+		;;
+	esac
+	shift
+done
+
+host_target=$("$stage_runtime" --host-target)
+
+if [ ${#targets[@]} -eq 0 ] && [ -n "${AADL_VSIX_TARGETS:-}" ]; then
+	case "$AADL_VSIX_TARGETS" in
+	all)
+		while IFS= read -r line; do targets+=("$line"); done < <("$stage_runtime" --all-targets)
+		;;
+	host)
+		targets=("$host_target")
+		;;
+	*)
+		IFS=', ' read -r -a targets <<<"$AADL_VSIX_TARGETS"
+		;;
+	esac
+fi
+
+[ ${#targets[@]} -gt 0 ] || targets=("$host_target")
+
+command -v vsce >/dev/null 2>&1 || die "vsce not found on PATH; run this through 'npm run package'"
+
+# Host first when it is in the list: it is the target whose VSIX gets executed by
+# the test phase, and packaging is the step most likely to fail, so fail on the
+# one that costs least to diagnose.
+ordered=()
+for target in "${targets[@]}"; do
+	[ "$target" = "$host_target" ] && ordered+=("$target")
+done
+for target in "${targets[@]}"; do
+	[ "$target" != "$host_target" ] && ordered+=("$target")
+done
+
+cd "$extension_dir"
+for target in "${ordered[@]}"; do
+	"$stage_runtime" "$target"
+	vsce package --no-dependencies --follow-symlinks --target "$target" "${pre_release[@]+"${pre_release[@]}"}"
+done
+
+# Leave the host runtime staged whatever the last target was. The test phase runs
+# straight after packaging and execs this runtime; a foreign-arch one left behind
+# would fail there, a long way from the cause.
+if [ "${ordered[${#ordered[@]} - 1]}" != "$host_target" ]; then
+	"$stage_runtime" "$host_target"
+fi
+
+echo "Packaged:"
+for target in "${ordered[@]}"; do
+	echo "  $(ls "$extension_dir"/aadl2-"$target"-*.vsix)"
+done

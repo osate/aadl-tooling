@@ -25,6 +25,9 @@ set -euo pipefail
 script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=common.sh
 source "$script_dir/common.sh"
+# Shared with VS Code extension packaging, which bundles the same runtimes.
+# shellcheck source=../../../scripts/lib/temurin.sh
+source "$repo_root/scripts/lib/temurin.sh"
 
 default_targets=(macos-x64 macos-arm64 linux-x64 linux-arm64)
 targets=()
@@ -152,32 +155,15 @@ mkdir -p "$downloads_dir" "$staging_dir" "$artifacts_dir" "$generated_dir"
 # needing the dist tree.
 printf '%s\n' "$OSATE_CLI_VERSION" > "$artifacts_dir/VERSION"
 
-temurin_download_url() {
-	local target=$1
-	local adoptium_os adoptium_arch
-	adoptium_os=$(target_adoptium_os "$target")
-	adoptium_arch=$(target_adoptium_arch "$target")
-	printf 'https://api.adoptium.net/v3/binary/latest/%s/ga/%s/%s/jre/hotspot/normal/eclipse?project=jdk\n' \
-		"$java_feature_version" "$adoptium_os" "$adoptium_arch"
-}
-
 download_temurin() {
 	local target=$1
 	local ext=$2
-	local archive="$downloads_dir/temurin-${java_feature_version}-${target}.${ext}"
-	local tmp="$archive.tmp"
-	local url
 
-	if [ -f "$archive" ]; then
-		printf '%s\n' "$archive"
-		return
-	fi
-
-	url=$(temurin_download_url "$target")
-	echo "Downloading Eclipse Temurin $java_feature_version JRE for $target" >&2
-	curl -fL --retry 3 --retry-delay 2 -o "$tmp" "$url"
-	mv "$tmp" "$archive"
-	printf '%s\n' "$archive"
+	temurin_download "$java_feature_version" \
+		"$(target_adoptium_os "$target")" \
+		"$(target_adoptium_arch "$target")" \
+		"$ext" \
+		"$downloads_dir"
 }
 
 extract_runtime() {
@@ -185,18 +171,12 @@ extract_runtime() {
 	local archive=$2
 	local extract_dir=$3
 	local runtime_dir=$4
-	local java_name="java"
-	local java_bin runtime_home
+	local runtime_home
 
-	rm -rf "$extract_dir" "$runtime_dir"
-	mkdir -p "$extract_dir" "$runtime_dir"
+	runtime_home=$(temurin_unpack "$archive" "$extract_dir" java)
 
-	require_command tar
-	tar -xzf "$archive" -C "$extract_dir"
-
-	java_bin=$(find "$extract_dir" -path "*/bin/$java_name" -print -quit)
-	[ -n "$java_bin" ] || die "could not find $java_name in extracted runtime for $target"
-	runtime_home=$(cd "$(dirname "$java_bin")/.." && pwd)
+	rm -rf "$runtime_dir"
+	mkdir -p "$runtime_dir"
 	cp -R "$runtime_home/." "$runtime_dir/"
 }
 

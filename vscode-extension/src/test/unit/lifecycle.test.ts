@@ -47,9 +47,25 @@ suite('language server lifecycle', () => {
 		assert.ok(!source.includes("path.join('server', 'aadl', 'bin'"));
 	});
 
-	test('does not fall back from the Red Hat tooling JRE', () => {
-		assert.ok(source.includes("source: 'Red Hat Java extension'"));
+	test('runs the bundled runtime and nothing else', () => {
+		assert.ok(source.includes("source: 'bundled Java runtime'"));
+		assert.ok(source.includes('bundledRuntimeHome(context.extensionPath)'));
+		assert.ok(!source.includes('redhat.java'),
+			'the Red Hat Java extension is no longer a dependency');
 		assert.ok(!source.includes("source: 'JAVA_HOME'"));
 		assert.ok(!source.includes("source: 'PATH'"));
+	});
+
+	test('does not let the environment reconfigure the bundled runtime', () => {
+		for (const variable of ['JAVA_TOOL_OPTIONS', '_JAVA_OPTIONS', 'JDK_JAVA_OPTIONS']) {
+			assert.ok(source.includes(`delete baseEnv.${variable}`),
+				`${variable} must not be inherited by the server process`);
+		}
+	});
+
+	test('reports a startup failure instead of rejecting activation', () => {
+		assert.ok(/activate\([\s\S]*?try \{\s*javaRuntime = await startLanguageServer/.test(source),
+			'a runtime that cannot start must be reported, not surfaced as a bare activation failure');
+		assert.ok(source.includes('showErrorMessage(message)'));
 	});
 });

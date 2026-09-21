@@ -32,11 +32,17 @@ Code.
 In Visual Studio Code, open the Extensions view, search for `AADL2` from the
 `osate` publisher, and select **Install**.
 
-To install a downloaded release instead, open the Extensions view menu, select
-**Install from VSIX...**, and choose the `aadl2-<version>.vsix` file.
+Installing from the Marketplace gets the package built for your platform, which
+is what you want: each one contains its own Java runtime.
 
-The extension automatically installs its required Red Hat Java extension
-dependency.
+To install a downloaded release instead, open the Extensions view menu, select
+**Install from VSIX...**, and choose the `aadl2-<platform>-<version>.vsix` file
+matching your operating system and processor, such as
+`aadl2-darwin-arm64-<version>.vsix`. A package for another platform installs but
+cannot start the language server.
+
+Nothing else has to be installed. The extension carries the Java runtime it
+needs, and no longer requires the Red Hat Java extension.
 
 ## Getting Started
 
@@ -76,12 +82,16 @@ diagnostics are written to the **AADL2 Language Server** output channel.
 The extension requires:
 
 - Visual Studio Code 1.110 or newer
-- The Red Hat Java extension (`redhat.java`), installed automatically
-- Java 21 or newer in the tooling JRE provided by the Red Hat Java extension
+- One of the supported platforms: macOS (Intel or Apple silicon), Linux (x64 or
+  arm64), or Windows (x64 or arm64)
 
-The AADL extension always uses that tooling JRE to run its bundled language
-server. If the JRE is unavailable or outdated, update or reinstall the Red Hat
-Java extension.
+No Java installation is required. Every package bundles an Eclipse Temurin 21
+JRE, and the extension runs the language server with that runtime only — it never
+uses `JAVA_HOME`, a Java installation on the `PATH`, or another extension's
+runtime, so the server behaves the same on every machine.
+
+Platforms outside that list, including Alpine Linux and 32-bit ARM, have no
+package and cannot install the extension.
 
 ## Extension Settings
 
@@ -132,10 +142,12 @@ restart.
 
 Open **View: Toggle Output**, select **AADL2 Language Server**, and inspect the
 startup message. The channel identifies the Java executable and version used to
-launch the server.
+launch the server, which is always the runtime inside the extension.
 
-If the Red Hat Java extension does not provide a tooling JRE, or provides a Java
-version older than 21, update or reinstall that extension.
+If the error says the bundled runtime could not be run, the installed package was
+almost certainly built for a different platform — most often because it was
+installed from a downloaded VSIX. Reinstall from the Marketplace, which selects
+the right package automatically.
 
 ### Editing results appear stale
 
@@ -157,3 +169,12 @@ steps, and relevant output-channel messages.
 ## Release Notes
 
 See the [changelog](CHANGELOG.md) for release notes.
+
+## Third-party software
+
+Each package embeds an unmodified Eclipse Temurin 21 JRE from
+[Adoptium](https://adoptium.net), distributed under the GNU General Public
+License, version 2, with the Classpath Exception. Its own license and notice files
+travel with it under `runtime/legal/` and `runtime/NOTICE` inside the installed
+extension. The AADL extension itself, and the language server it runs, are covered
+by [LICENSE.txt](LICENSE.txt).

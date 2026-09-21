@@ -35,6 +35,29 @@ export function javaExecutableIn(javaHome: string, platform: NodeJS.Platform = p
 	return path.join(javaHome, 'bin', platform === 'win32' ? 'java.exe' : 'java');
 }
 
+/**
+ * The Java home bundled in the extension. Packaging stages a platform-specific
+ * Eclipse Temurin JRE here, so this is the only Java the extension ever uses:
+ * there is no discovery, no JAVA_HOME or PATH fallback, and no setting to point
+ * somewhere else. Keep it in step with packaging/scripts/stage-runtime.
+ */
+export function bundledRuntimeHome(extensionPath: string): string {
+	return path.join(extensionPath, 'runtime');
+}
+
+/**
+ * Files that must be executable for the bundled runtime to work. `java` is
+ * obvious; `jspawnhelper` is what the JVM itself execs to spawn a process, and a
+ * packaging step that loses the mode bit turns that into a runtime failure far
+ * from its cause.
+ */
+export function executableRuntimeFiles(javaHome: string, platform: NodeJS.Platform = process.platform): string[] {
+	if (platform === 'win32') {
+		return [];
+	}
+	return [javaExecutableIn(javaHome, platform), path.join(javaHome, 'lib', 'jspawnhelper')];
+}
+
 export function parseJavaMajorVersion(versionOutput: string): number | undefined {
 	const match = /version\s+"([^"]+)"/i.exec(versionOutput);
 	if (!match) {
