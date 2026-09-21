@@ -22,3 +22,4 @@
 
 org.osate.aadl.ls.setup.Aadl2LsSetup
 org.osate.aadl.ls.setup.ErrorModelLsSetup
+org.osate.aadl.ls.setup.BehaviorAnnexLsSetup

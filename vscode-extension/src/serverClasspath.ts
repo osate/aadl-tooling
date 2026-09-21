@@ -23,17 +23,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const ANTLR_4_4_RUNTIME = 'antlr-runtime-4.4.jar';
-const INCOMPATIBLE_ANTLR_RUNTIME_PREFIX = 'org.antlr.antlr4-runtime_';
-
 export function serverClasspath(libDirectory: string): string {
 	const jars = fs.readdirSync(libDirectory)
-		.filter(name => name.endsWith('.jar') && !name.startsWith(INCOMPATIBLE_ANTLR_RUNTIME_PREFIX))
+		.filter(name => name.endsWith('.jar'))
 		.sort();
-
-	if (!jars.includes(ANTLR_4_4_RUNTIME)) {
-		throw new Error(`AADL language server is missing ${ANTLR_4_4_RUNTIME}`);
-	}
 
 	return jars.map(name => path.join(libDirectory, name)).join(path.delimiter);
 }

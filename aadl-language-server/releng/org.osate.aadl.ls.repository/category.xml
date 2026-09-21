@@ -32,6 +32,9 @@
    <feature id="org.osate.xtext.aadl2.errormodel.feature">
       <category name="osate2"/>
    </feature>
+   <feature id="org.osate.ba.feature">
+      <category name="osate2"/>
+   </feature>
    <bundle id="org.osate.aadl.ls"/>
    <category-def name="osate2" label="OSATE2 for AADL2">
       <description>

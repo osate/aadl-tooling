@@ -57,42 +57,6 @@
 					<includeAllDependencies>true</includeAllDependencies>
 				</configuration>
 			</plugin>
-			<plugin>
-				<groupId>org.apache.maven.plugins</groupId>
-				<artifactId>maven-antrun-plugin</artifactId>
-				<version>3.1.0</version>
-				<executions>
-					<execution>
-						<id>extract-antlr-4-runtime</id>
-						<phase>package</phase>
-						<goals>
-							<goal>run</goal>
-						</goals>
-						<configuration>
-							<target>
-								<pathconvert property="behavior.annex.bundle">
-									<fileset dir="${project.build.directory}/repository/plugins">
-										<include name="org.osate.ba_*.jar"/>
-									</fileset>
-								</pathconvert>
-								<fail unless="behavior.annex.bundle"
-									message="Behavior Annex bundle not found in the assembled repository"/>
-								<delete dir="${project.build.directory}/antlr-runtime"/>
-								<mkdir dir="${project.build.directory}/antlr-runtime"/>
-								<unzip src="${behavior.annex.bundle}"
-									dest="${project.build.directory}/antlr-runtime">
-									<patternset>
-										<include name="resources/libs/antlr-runtime-4.4.jar"/>
-									</patternset>
-									<mapper type="flatten"/>
-								</unzip>
-								<copy file="${project.build.directory}/antlr-runtime/antlr-runtime-4.4.jar"
-									todir="${project.build.directory}/repository/plugins"/>
-							</target>
-						</configuration>
-					</execution>
-				</executions>
-			</plugin>
 <!-- 
 			<plugin>
 				<groupId>com.coderplus.maven.plugins</groupId>

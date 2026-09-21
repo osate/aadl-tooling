@@ -66,6 +66,7 @@ public class Aadl2LsResourceServiceProviderRegistry implements Provider<IResourc
 		// for "aadl"), so the language-server injectors win.
 		register(new Aadl2LsSetup());
 		register(new ErrorModelLsSetup());
+		register(new BehaviorAnnexLsSetup());
 	}
 
 	private void register(ISetup setup) {
