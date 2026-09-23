@@ -7,7 +7,12 @@ pom.xml
 .npmrc
 node/**
 target/**
+packaging/**
 src/**
+# Gradle start scripts that search JAVA_HOME and PATH for a JVM. The extension
+# launches the server itself with the bundled runtime and never uses these, and
+# shipping them would offer a second, unsupported way to start it.
+server/aadl/bin/**
 .gitignore
 .yarnrc
 vsc-extension-quickstart.md

@@ -22,7 +22,6 @@
  ******************************************************************************/
 import {
 	commands,
-	extensions,
 	window,
 	workspace,
 	ExtensionContext,
@@ -38,6 +37,7 @@ import {
 } from 'vscode-languageclient/node';
 
 import * as path from 'path';
+import * as fs from 'fs';
 import { execFile } from 'child_process';
 
 import { findSymbol } from './symbols';
@@ -49,6 +49,8 @@ import {
 } from './contributedAadl';
 import { AnalysisCommandResult, presentAnalysisResult } from './analysisResult';
 import {
+	bundledRuntimeHome,
+	executableRuntimeFiles,
 	javaExecutableIn,
 	JavaRuntime,
 	minimumJavaMajorVersion,
@@ -58,37 +60,12 @@ import { serverClasspath } from './serverClasspath';
 
 let client: LanguageClient;
 
-interface RedHatJavaApi {
-	javaRequirement?: {
-		// eslint-disable-next-line @typescript-eslint/naming-convention
-		tooling_jre?: string;
-	};
-}
-
 export interface AadlExtensionApi {
-	javaRuntime: JavaRuntime;
+	javaRuntime?: JavaRuntime;
 }
 
 function errorMessage(error: unknown): string {
 	return error instanceof Error ? error.message : String(error);
-}
-
-async function redHatJavaHome(): Promise<string> {
-	const ext = extensions.getExtension<RedHatJavaApi>('redhat.java');
-	if (!ext) {
-		throw new Error('The Red Hat Java extension (redhat.java) is required to run the AADL language server.');
-	}
-	let api: RedHatJavaApi | undefined;
-	try {
-		api = ext.isActive ? ext.exports : await ext.activate();
-	} catch (error) {
-		throw new Error(`Could not activate the Red Hat Java extension: ${errorMessage(error)}`);
-	}
-	const javaHome = api?.javaRequirement?.tooling_jre;
-	if (!javaHome) {
-		throw new Error('The Red Hat Java extension did not provide a tooling JRE. Update or reinstall redhat.java.');
-	}
-	return javaHome;
 }
 
 async function javaMajorVersion(executable: string): Promise<number | undefined> {
@@ -103,34 +80,65 @@ async function javaMajorVersion(executable: string): Promise<number | undefined>
 	});
 }
 
-async function resolveJavaRuntime(): Promise<JavaRuntime> {
-	const toolingJre = await redHatJavaHome();
-	const executable = javaExecutableIn(toolingJre);
-	const majorVersion = await javaMajorVersion(executable);
+/**
+ * Makes the bundled runtime executable again after a packaging or installation
+ * step dropped the mode bits. vsce stores them and VS Code restores them, so
+ * this is a repair attempted only once the runtime has already failed to run —
+ * not something to do on every activation.
+ */
+function repairRuntimePermissions(javaHome: string): void {
+	for (const file of executableRuntimeFiles(javaHome)) {
+		try {
+			fs.chmodSync(file, 0o755);
+		} catch {
+			// Nothing to do: the probe below reports the runtime as unusable.
+		}
+	}
+}
+
+async function resolveJavaRuntime(context: ExtensionContext): Promise<JavaRuntime> {
+	const home = bundledRuntimeHome(context.extensionPath);
+	const executable = javaExecutableIn(home);
+
+	let majorVersion = await javaMajorVersion(executable);
+	if (majorVersion === undefined) {
+		repairRuntimePermissions(home);
+		majorVersion = await javaMajorVersion(executable);
+	}
+
 	if (majorVersion === undefined) {
 		throw new Error(
-			`Could not run the Red Hat Java extension's tooling JRE at ${executable}. `
-			+ 'Update or reinstall redhat.java.'
+			`Could not run the bundled Java runtime at ${executable}. `
+			+ 'This usually means the installed package was built for a different platform; '
+			+ 'reinstall the AADL extension from the Marketplace so the right one is chosen.'
 		);
 	}
 	if (majorVersion < minimumJavaMajorVersion) {
 		throw new Error(
-			`The Red Hat Java extension's tooling JRE is Java ${majorVersion}; `
-			+ `Java ${minimumJavaMajorVersion} or newer is required. Update redhat.java.`
+			`The bundled Java runtime at ${executable} is Java ${majorVersion}; `
+			+ `Java ${minimumJavaMajorVersion} or newer is required. This is a packaging error.`
 		);
 	}
-	return { executable, home: toolingJre, source: 'Red Hat Java extension', majorVersion };
+	return { executable, home, source: 'bundled Java runtime', majorVersion };
 }
 
 async function startLanguageServer(
 	context: ExtensionContext,
 	aadlFileWatcher: FileSystemWatcher
 ): Promise<JavaRuntime> {
-	const java = await resolveJavaRuntime();
+	const java = await resolveJavaRuntime(context);
 	const classpath = serverClasspath(context.asAbsolutePath(path.join('server', 'aadl', 'lib')));
 	const mainClass = 'org.osate.aadl.ls.RunAadl2Server';
+	// The point of bundling a runtime is that every user runs the same JVM the
+	// same way. These three variables are picked up by any JVM launch and can
+	// inject agents or repoint the trust store, so they are dropped rather than
+	// inherited; JAVA_HOME is set so anything the server spawns finds the
+	// bundled runtime instead of searching the system.
 	// eslint-disable-next-line @typescript-eslint/naming-convention
-	const baseEnv = { ...process.env, ...(java.home ? { JAVA_HOME: java.home } : {}) };
+	const baseEnv: NodeJS.ProcessEnv = { ...process.env, JAVA_HOME: java.home };
+	delete baseEnv.JAVA_TOOL_OPTIONS;
+	delete baseEnv._JAVA_OPTIONS;
+	delete baseEnv.JDK_JAVA_OPTIONS;
 
 	const serverOptions: ServerOptions = {
 		run: {
@@ -190,8 +198,19 @@ function showAnalysisResult(result: AnalysisCommandResult): void {
 export async function activate(context: ExtensionContext): Promise<AadlExtensionApi> {
 	const aadlFileWatcher = workspace.createFileSystemWatcher('**/*.aadl');
 	context.subscriptions.push(aadlFileWatcher);
-	// Start the language server
-	const javaRuntime = await startLanguageServer(context, aadlFileWatcher);
+
+	// Start the language server. Letting this reject would surface only as a
+	// generic activation failure in the Extensions view, which is no way to learn
+	// that the installed package was built for another platform. Report it, then
+	// carry on registering commands so aadl2.restart can retry.
+	let javaRuntime: JavaRuntime | undefined;
+	try {
+		javaRuntime = await startLanguageServer(context, aadlFileWatcher);
+	} catch (error) {
+		const message = `The AADL language server did not start: ${errorMessage(error)}`;
+		console.error(message, error);
+		void window.showErrorMessage(message);
+	}
 
 	// Make plugin-contributed AADL sources available as read-only virtual documents.
 	// Resolve the client lazily because the restart command replaces the client instance.

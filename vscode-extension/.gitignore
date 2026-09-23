@@ -3,6 +3,8 @@ dist
 node_modules
 node
 target
+# Symlink to the staged Eclipse Temurin JRE; see packaging/scripts/stage-runtime.
+runtime
 .vscode-test/
 *.vsix
 tsconfig.tsbuildinfo

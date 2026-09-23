@@ -24,6 +24,13 @@ on:
         description: Mark the VSIX as a pre-release.
         type: boolean
         default: false
+      extension-targets:
+        # Every VSIX bundles a platform-specific JRE, so a release has to build
+        # one package per platform. That is ~125 MB each, which is why anything
+        # that is not a release asks for the host alone.
+        description: 'Platforms to package the extension for: host, all, or a comma-separated list.'
+        type: string
+        default: host
       test-extension:
         description: Run the VS Code extension test suites.
         type: boolean
@@ -42,6 +49,9 @@ on:
       maven-cache-key:
         description: Cache key holding the Maven dependencies, for pruning.
         value: ${{ jobs.build.outputs.maven-cache-key }}
+      temurin-cache-key:
+        description: Cache key holding the bundled Java runtimes, for pruning.
+        value: ${{ jobs.build.outputs.temurin-cache-key }}
       cli-version:
         description: The osate-cli version from the build provenance.
         value: ${{ jobs.build.outputs.cli-version }}
@@ -65,6 +75,7 @@ jobs:
       osate-sha: ${{ steps.pin.outputs.sha }}
       osate-cache-key: ${{ steps.keys.outputs.osate }}
       maven-cache-key: ${{ steps.keys.outputs.maven }}
+      temurin-cache-key: ${{ steps.keys.outputs.temurin }}
       cli-version: ${{ steps.versions.outputs.cli }}
       extension-version: ${{ steps.versions.outputs.extension }}
 
@@ -102,9 +113,11 @@ jobs:
         env:
           OSATE_KEY: osate-${{ runner.os }}-${{ steps.pin.outputs.sha }}-v1
           MAVEN_KEY: maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('**/pom.xml') }}
+          TEMURIN_KEY: temurin-${{ runner.os }}-${{ hashFiles('scripts/lib/temurin.sh') }}
         run: |
           echo "osate=$OSATE_KEY" >> "$GITHUB_OUTPUT"
           echo "maven=$MAVEN_KEY" >> "$GITHUB_OUTPUT"
+          echo "temurin=$TEMURIN_KEY" >> "$GITHUB_OUTPUT"
 
       # Third-party downloads, above all Tycho's resolution of the Eclipse target
       # platform. Safe to reuse partially, so prefix fallback is enabled. org/osate
@@ -203,6 +216,21 @@ jobs:
           fi
           echo "osate2 pin: \`${{ steps.pin.outputs.sha }}\`" >> "$GITHUB_STEP_SUMMARY"
 
+      # The bundled JREs the extension packages: ~50 MB per platform, so a release
+      # that builds all six downloads ~300 MB from Adoptium. Keyed on the helper
+      # that owns the feature version. Safe to reuse loosely — the helper verifies
+      # every archive against Adoptium's published checksum and re-downloads one
+      # that a floating GA release has superseded.
+      - name: Restore the bundled Java runtimes
+        id: temurin
+        if: inputs.build-extension
+        uses: actions/cache/restore@v5
+        with:
+          path: target/temurin-downloads
+          key: temurin-${{ runner.os }}-${{ hashFiles('scripts/lib/temurin.sh') }}
+          restore-keys: |
+            temurin-${{ runner.os }}-
+
       # Build only what the caller asked for. A release of one component has no
       # reason to build the other two.
       - name: Build and test
@@ -218,6 +246,9 @@ jobs:
           fi
           if [ "${{ inputs.extension-pre-release }}" = "true" ]; then
             args+=(--extension-pre-release)
+          fi
+          if [ "${{ inputs.build-extension }}" = "true" ]; then
+            args+=(--extension-targets "${{ inputs.extension-targets }}")
           fi
           printf 'build-test-release %s\n' "${args[*]}"
           ./scripts/build-test-release "${args[@]}"
@@ -260,12 +291,16 @@ jobs:
             aadl-language-server/releng/org.osate.aadl.ls.repository/target/*.zip
             target/build-provenance.properties
 
+      # One VSIX per platform, each ~125 MB because of its bundled runtime, so
+      # these are not kept for the default 90 days. A release publishes from them
+      # within the same workflow run.
       - name: Upload the VS Code extension
         if: inputs.upload-artifacts && inputs.build-extension
         uses: actions/upload-artifact@v6
         with:
           name: vscode-extension
           if-no-files-found: error
+          retention-days: 7
           path: vscode-extension/aadl2-*.vsix
 
       - name: Upload the CLI distribution
@@ -298,3 +333,10 @@ jobs:
             ~/.m2/repository
             !~/.m2/repository/org/osate
           key: maven-${{ runner.os }}-${{ steps.pin.outputs.sha }}-${{ hashFiles('**/pom.xml') }}
+
+      - name: Save the bundled Java runtimes
+        if: always() && inputs.build-extension && steps.temurin.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v5
+        with:
+          path: target/temurin-downloads
+          key: temurin-${{ runner.os }}-${{ hashFiles('scripts/lib/temurin.sh') }}

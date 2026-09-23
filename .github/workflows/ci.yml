@@ -67,6 +67,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       OSATE_KEEP: ${{ needs.build.outputs.osate-cache-key }}
       MAVEN_KEEP: ${{ needs.build.outputs.maven-cache-key }}
+      TEMURIN_KEEP: ${{ needs.build.outputs.temurin-cache-key }}
     steps:
       - name: Delete superseded cache entries
         run: |
@@ -95,6 +96,7 @@ jobs:
 
           prune "osate-${{ runner.os }}-" "$OSATE_KEEP"
           prune "maven-${{ runner.os }}-" "$MAVEN_KEEP"
+          prune "temurin-${{ runner.os }}-" "$TEMURIN_KEEP"
 
           # Pull-request caches live on their own refs, which the prune above
           # deliberately does not touch, and they are the bulk of the usage: one

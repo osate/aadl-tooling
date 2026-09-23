@@ -79,10 +79,23 @@ so a missing packager cannot silently drop the four Linux packages.
 
 **`vscode-v*`** — [`release-vscode.yml`](.github/workflows/release-vscode.yml)
 
-`aadl2-<version>.vsix` attached to a GitHub Release, then published to the VS
-Code Marketplace and Open VSX. The VSIX is checked for a plausible number of
-bundled server plug-ins first, because the server reaches it through a symlink
-that would otherwise fail silently.
+Six platform packages — `aadl2-<platform>-<version>.vsix` for darwin-x64,
+darwin-arm64, linux-x64, linux-arm64, win32-x64 and win32-arm64 — attached to a
+GitHub Release, then published to the VS Code Marketplace and Open VSX. Each one
+embeds an Eclipse Temurin 21 JRE for its platform, which is why there is a package
+per platform and no universal one.
+
+Every package is checked before anything is published: a plausible number of
+server plug-ins, the bundled runtime, the declared target platform, and the
+pre-release marker. The plug-ins and the runtime both reach the VSIX through
+symlinks that would otherwise fail silently, and Marketplace versions are
+immutable — publishing three targets and then failing would leave platforms
+stranded on different versions for good. For the same reason all six go to the
+Marketplace in a single `vsce publish` invocation.
+
+Clients on a platform we do not build for — Alpine Linux, 32-bit ARM, and the web
+— are offered nothing at all, because no untargeted fallback package is
+published.
 
 ### Stable or pre-release
 
@@ -128,6 +141,10 @@ To produce a pre-release VSIX locally:
 ```bash
 ./scripts/build-test-release --skip-osate --extension-pre-release
 ```
+
+That packages the host platform only. Add `--extension-targets all` to reproduce
+the full release set; each package downloads its platform's JRE once and is then
+cached under `target/temurin-downloads`.
 
 **`ls-v*`** — [`release-server.yml`](.github/workflows/release-server.yml)
 
@@ -179,8 +196,13 @@ gh workflow run release-osate-cli.yml --repo osate/aadl-tooling --ref main
 - The `osate2` submodule pin is part of every release. `build-provenance.properties`
   records the tooling commit, the OSATE commit and gitlink, and all three
   versions, so a released artifact can always be traced back to its exact inputs.
-- macOS tarballs are unsigned and not notarized. Downloads through a browser will
-  be quarantined by Gatekeeper; the Homebrew path is not affected. The `.deb` and
-  `.rpm` packages are unsigned too.
+- macOS **tarballs** are unsigned and not notarized. Downloads through a browser
+  will be quarantined by Gatekeeper; the Homebrew path is not affected. The `.deb`
+  and `.rpm` packages are unsigned too. This does not apply to the VS Code
+  packages: Adoptium's own per-binary signatures travel inside the JRE, and VS
+  Code does not quarantine the files it extracts from a VSIX.
+- The bundled JREs are verified against Adoptium's published checksums at build
+  time, and `build-provenance.properties` records the vendor, feature version and
+  resolved runtime version that shipped.
 - Release runs reuse the cached OSATE build when the submodule pin has not moved.
   A release right after a submodule bump pays for a full OSATE build.

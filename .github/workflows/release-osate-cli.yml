@@ -119,6 +119,19 @@ jobs:
             -Djavadoc=false -DfailIfNoTests=false \
             clean install
 
+      # The four bundled JREs, ~190 MB from Adoptium on every release otherwise.
+      # Keyed on the helper that owns the feature version and shared in spirit with
+      # build.yml's cache; the paths differ because each packaging path keeps its
+      # own download directory. Loose reuse is safe: the helper verifies every
+      # archive against Adoptium's published checksum.
+      - name: Cache the bundled Java runtimes
+        uses: actions/cache@v5
+        with:
+          path: osate-cli/packaging/target/downloads
+          key: temurin-cli-${{ runner.os }}-${{ hashFiles('scripts/lib/temurin.sh') }}
+          restore-keys: |
+            temurin-cli-${{ runner.os }}-
+
       - name: Build the tooling and CLI
         run: ./scripts/build-test-release --skip-osate --skip-extension
 

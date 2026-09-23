@@ -27,16 +27,24 @@ Guidance for the TypeScript VS Code extension.
 
 ## Runtime contract
 
-- The extension requires `redhat.java` and launches the server with that
-  extension's tooling JRE. Java 21 or newer is required; do not add a fallback
-  to another Java installation.
+- The extension runs the Eclipse Temurin JRE bundled at `runtime/` and nothing
+  else. There is no discovery, no `JAVA_HOME` or `PATH` fallback, no dependency
+  on `redhat.java`, and no setting that points elsewhere: one supported runtime
+  means a user's failure is reproducible. Do not add a fallback.
+- `JAVA_TOOL_OPTIONS`, `_JAVA_OPTIONS` and `JDK_JAVA_OPTIONS` are removed from
+  the server's environment. They would let a machine inject agents or repoint the
+  trust store into the runtime we bundle precisely to control.
+- The **JRE** image is enough. It ships `libjdwp`, so the `-agentlib:jdwp` debug
+  launch works; do not switch to the ~40 MB larger JDK for it.
+- `runtime/` is a symlink that `packaging/scripts/stage-runtime` creates, like
+  `server/aadl/lib`. Both reach the VSIX only because packaging passes
+  `--follow-symlinks`; keep it.
 - The bundled server is launched over stdio using
   `org.osate.aadl.ls.RunAadl2Server`.
-- `server/aadl/lib` is a symlink to the generated language-server p2 plug-ins.
-  VSIX packaging must continue to use `--follow-symlinks`.
-- `serverClasspath` builds an explicit classpath, excludes the incompatible
-  standalone ANTLR runtime bundle, and fails if `antlr-runtime-4.4.jar` is
-  absent. Keep its tests with any classpath change.
+- `serverClasspath` builds an explicit classpath from every jar in
+  `server/aadl/lib`. The ANTLR 4 runtime bundle, which would collide with the
+  ANTLR 3 runtime Xtext parsers link against, is excluded at packaging time by
+  `.vscodeignore`. Keep its tests with any classpath change.
 - Reuse the existing file watcher and language-client lifecycle when
   implementing restart behavior.
 
@@ -51,16 +59,32 @@ npm run lint
 npm run test:unit
 ```
 
-`npm run test:integration` downloads/launches VS Code and may install
-`redhat.java`, so it needs network access. `npm test` runs unit and integration
-tests.
+Unit tests run with no runtime staged, so keep the bundled-runtime helpers pure.
+
+`npm run test:integration` stages the host runtime, then downloads and launches
+VS Code, so it needs network access the first time. It runs with
+`--disable-extensions`; the suite must never skip itself.
+
+```bash
+npm run stage-runtime        # host platform, into runtime/
+npm run stage-runtime linux-x64
+```
 
 Package the extension with:
 
 ```bash
-npm run package              # stable
+npm run package              # stable, host platform only
 npm run package:pre-release  # marked as a pre-release
+AADL_VSIX_TARGETS=all npm run package
 ```
+
+Each VSIX bundles a platform-specific JRE, so there is no universal package:
+`vsce package --target` produces `aadl2-<target>-<version>.vsix` for every
+supported platform (`packaging/scripts/stage-runtime --all-targets`). A client on
+any other platform is offered nothing, because no untargeted fallback is
+published. Maven selects the set through `-Dvsce.package.targets` (`host`,
+`all`, or a list), which reaches `packaging/scripts/package-vsix` as
+`AADL_VSIX_TARGETS`.
 
 The pre-release marker is written into the VSIX manifest at package time, and
 `vsce publish` refuses to publish a package as a pre-release unless it was built
@@ -82,15 +106,21 @@ no dependency edge from this module to the server and a single reactor build wit
 `validate` if they are missing.
 
 The Maven build installs pinned Node, runs `npm install`, compiles the
-extension, and packages `aadl2-*.vsix`. If the server changed, rebuild its p2
-repository before packaging.
+extension, stages the bundled runtime, and packages `aadl2-*.vsix`. If the server
+changed, rebuild its p2 repository before packaging.
+
+`mvn clean` deliberately leaves `runtime/` alone: it is a symlink into a JRE
+cache under the repository-root `target/`, and maven-clean deletes the contents
+of the link's target even with `followSymlinks=false`. Staging recreates the link
+on every build anyway.
 
 ## Tests
 
-- Unit tests cover helpers, Java selection, lifecycle behavior, server
-  classpath construction, command arguments, symbols, and syntax grammars.
+- Unit tests cover helpers, bundled-runtime resolution, lifecycle behavior,
+  server classpath construction, command arguments, symbols, and syntax grammars.
 - Integration tests cover manifest contributions, extension discovery, and
-  activation/language features when `redhat.java` is available.
+  activation/language features. They are unconditional: the runtime ships in the
+  extension, so there is nothing left to be absent and nothing to skip for.
 - Test output is compiled through `tsconfig.test.json` into `out/test/` and is
   excluded from the VSIX.
 
@@ -119,6 +149,9 @@ When changing commands or settings:
 - Record user-facing changes in `CHANGELOG.md`.
 - Keep `.vscodeignore` synchronized with `osate-cli/dist/pom.xml` when
   changing bundled plug-in exclusions.
+- The bundled runtime is downloaded through `scripts/lib/temurin.sh`, shared with
+  osate-cli packaging. Change the Temurin feature version there, and keep it at or
+  above `minimumJavaMajorVersion` in `src/javaRuntime.ts`.
 - Verify the generated VSIX rather than assuming a successful TypeScript
   compile proves packaging.
 

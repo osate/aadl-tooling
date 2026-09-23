@@ -21,7 +21,10 @@
  * DM26-0821
  ******************************************************************************/
 import * as assert from 'assert';
+import * as path from 'path';
 import {
+	bundledRuntimeHome,
+	executableRuntimeFiles,
 	javaExecutableIn,
 	minimumJavaMajorVersion,
 	parseJavaMajorVersion
@@ -48,5 +51,19 @@ suite('Java runtime selection helpers', () => {
 	test('constructs the platform-specific executable inside a Java home', () => {
 		assert.strictEqual(javaExecutableIn('/opt/jdk', 'linux'), '/opt/jdk/bin/java');
 		assert.strictEqual(javaExecutableIn('C:\\Java\\jdk', 'win32'), 'C:\\Java\\jdk/bin/java.exe');
+	});
+
+	// The staging script writes this exact directory, so the two must not drift:
+	// a mismatch produces an extension that packages a runtime it cannot find.
+	test('looks for the bundled runtime beside the extension', () => {
+		assert.strictEqual(bundledRuntimeHome('/ext/aadl2'), path.join('/ext/aadl2', 'runtime'));
+	});
+
+	test('knows which bundled files must stay executable', () => {
+		assert.deepStrictEqual(executableRuntimeFiles('/ext/aadl2/runtime', 'linux'), [
+			'/ext/aadl2/runtime/bin/java',
+			'/ext/aadl2/runtime/lib/jspawnhelper'
+		]);
+		assert.deepStrictEqual(executableRuntimeFiles('C:\\ext\\aadl2\\runtime', 'win32'), []);
 	});
 });

@@ -1,0 +1,140 @@
+#!/usr/bin/env bash
+# VSCode extension for AADL
+#
+# Copyright 2026 Carnegie Mellon University.
+#
+# NO WARRANTY. THIS CARNEGIE MELLON UNIVERSITY AND SOFTWARE ENGINEERING INSTITUTE MATERIAL IS
+# FURNISHED ON AN "AS-IS" BASIS. CARNEGIE MELLON UNIVERSITY MAKES NO WARRANTIES OF ANY KIND,
+# EITHER EXPRESSED OR IMPLIED, AS TO ANY MATTER INCLUDING, BUT NOT LIMITED TO, WARRANTY OF
+# FITNESS FOR PURPOSE OR MERCHANTABILITY, EXCLUSIVITY, OR RESULTS OBTAINED FROM USE OF THE
+# MATERIAL. CARNEGIE MELLON UNIVERSITY DOES NOT MAKE ANY WARRANTY OF ANY KIND WITH RESPECT TO
+# FREEDOM FROM PATENT, TRADEMARK, OR COPYRIGHT INFRINGEMENT.
+#
+# Licensed under a BSD (SEI)-style license, please see LICENSE.txt
+# or contact permission@sei.cmu.edu for full terms.
+#
+# [DISTRIBUTION STATEMENT A] This material has been approved for public release and unlimited
+# distribution.  Please see Copyright notice for non-US Government use and distribution.
+#
+# This Software includes and/or makes use of Third-Party Software each subject to its own license.
+#
+# DM26-0821
+
+set -euo pipefail
+
+script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+extension_dir=$(cd "$script_dir/../.." && pwd)
+repo_root=$(cd "$extension_dir/.." && pwd)
+# shellcheck source=../../../scripts/lib/temurin.sh
+source "$repo_root/scripts/lib/temurin.sh"
+
+# Kept outside vscode-extension: its `mvn clean` deletes the module's target
+# directory as well as its listed filesets, and re-downloading ~50 MB per target
+# per build is not a tolerable price for a clean build.
+downloads_dir="${TEMURIN_DOWNLOAD_DIR:-$repo_root/target/temurin-downloads}"
+runtimes_dir="${TEMURIN_RUNTIME_DIR:-$repo_root/target/temurin-runtimes}"
+runtime_link="$extension_dir/runtime"
+
+# The VS Code platform ids that `vsce package --target` accepts, restricted to
+# the ones we bundle a runtime for. A client on any other platform is offered no
+# package at all, because we publish no untargeted fallback.
+all_targets=(darwin-x64 darwin-arm64 linux-x64 linux-arm64 win32-x64 win32-arm64)
+
+usage() {
+	cat <<EOF
+usage: $(basename "$0") [<target>]
+
+Stages an Eclipse Temurin $TEMURIN_FEATURE_VERSION JRE for <target> and points
+vscode-extension/runtime at it, which is where the extension looks for its Java
+runtime at both package time and run time. Defaults to the host target.
+
+Targets: ${all_targets[*]}
+
+Options:
+  --host-target   Print the host's target id and exit without staging.
+  --all-targets   Print every supported target id and exit without staging.
+  -h, --help      Show this help.
+EOF
+}
+
+host_target() {
+	local os arch
+
+	case "$(uname -s)" in
+	Darwin) os=darwin ;;
+	Linux) os=linux ;;
+	MINGW* | MSYS* | CYGWIN*) os=win32 ;;
+	*) temurin_die "unsupported host operating system: $(uname -s)" ;;
+	esac
+
+	case "$(uname -m)" in
+	x86_64 | amd64) arch=x64 ;;
+	arm64 | aarch64) arch=arm64 ;;
+	*) temurin_die "unsupported host architecture: $(uname -m)" ;;
+	esac
+
+	printf '%s-%s\n' "$os" "$arch"
+}
+
+# Adoptium's own os/architecture names, plus the archive format and executable
+# name that go with them.
+adoptium_coordinates() {
+	case "$1" in
+	darwin-x64) printf 'mac x64 tar.gz java\n' ;;
+	darwin-arm64) printf 'mac aarch64 tar.gz java\n' ;;
+	linux-x64) printf 'linux x64 tar.gz java\n' ;;
+	linux-arm64) printf 'linux aarch64 tar.gz java\n' ;;
+	win32-x64) printf 'windows x64 zip java.exe\n' ;;
+	win32-arm64) printf 'windows aarch64 zip java.exe\n' ;;
+	*) temurin_die "unsupported target: $1 (expected one of: ${all_targets[*]})" ;;
+	esac
+}
+
+target=""
+while [ $# -gt 0 ]; do
+	case "$1" in
+	--host-target)
+		host_target
+		exit 0
+		;;
+	--all-targets)
+		printf '%s\n' "${all_targets[@]}"
+		exit 0
+		;;
+	-h | --help)
+		usage
+		exit 0
+		;;
+	-*)
+		echo "unknown option: $1" >&2
+		usage >&2
+		exit 2
+		;;
+	*)
+		[ -z "$target" ] || temurin_die "only one target may be given"
+		target=$1
+		;;
+	esac
+	shift
+done
+
+[ -n "$target" ] || target=$(host_target)
+
+# Two statements, not `read <<<"$(...)"`: a failure inside a command
+# substitution only exits the subshell, and there it would be masked by read's
+# own exit status, so an unsupported target would sail on with empty
+# coordinates. A plain assignment propagates the failure under `set -e`.
+coordinates=$(adoptium_coordinates "$target")
+read -r adoptium_os adoptium_arch archive_ext java_exe <<<"$coordinates"
+
+archive=$(temurin_download "$TEMURIN_FEATURE_VERSION" "$adoptium_os" "$adoptium_arch" "$archive_ext" "$downloads_dir")
+runtime_home=$(temurin_unpack "$archive" "$runtimes_dir/$target" "$java_exe")
+
+# A symlink rather than a copy, exactly like server/aadl/lib: vsce packages with
+# --follow-symlinks, so the runtime is dereferenced into the VSIX, and switching
+# targets costs nothing. Relative so the tree stays relocatable.
+rm -rf "$runtime_link"
+ln -s "../${runtime_home#"$repo_root"/}" "$runtime_link"
+
+[ -x "$runtime_link/bin/$java_exe" ] || temurin_die "staged runtime has no executable bin/$java_exe"
+echo "Staged Eclipse Temurin $TEMURIN_FEATURE_VERSION for $target at $runtime_link"
