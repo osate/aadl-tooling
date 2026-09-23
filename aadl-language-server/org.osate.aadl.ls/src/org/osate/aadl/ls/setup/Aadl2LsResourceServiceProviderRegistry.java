@@ -27,6 +27,7 @@ import org.eclipse.xtext.ISetup;
 import org.eclipse.xtext.resource.FileExtensionProvider;
 import org.eclipse.xtext.resource.IResourceServiceProvider;
 import org.eclipse.xtext.resource.ResourceServiceProviderServiceLoader;
+import org.osate.xtext.aadl2.errormodel.ide.refactoring.EmbeddedErrorModelResourceServiceProvider;
 
 import com.google.inject.Injector;
 import com.google.inject.Provider;
@@ -67,6 +68,13 @@ public class Aadl2LsResourceServiceProviderRegistry implements Provider<IResourc
 		register(new Aadl2LsSetup());
 		register(new ErrorModelLsSetup());
 		register(new BehaviorAnnexLsSetup());
+		// The final AADL provider must retain both LS bindings and embedded EMV2 rename support.
+		var aadlProvider = registry.getResourceServiceProvider(org.eclipse.emf.common.util.URI.createURI("model.aadl"));
+		if (!(aadlProvider instanceof EmbeddedErrorModelResourceServiceProvider)) {
+			var wrapped = new EmbeddedErrorModelResourceServiceProvider(aadlProvider);
+			registry.getExtensionToFactoryMap().put("aadl", wrapped);
+			IResourceServiceProvider.Registry.INSTANCE.getExtensionToFactoryMap().put("aadl", wrapped);
+		}
 	}
 
 	private void register(ISetup setup) {

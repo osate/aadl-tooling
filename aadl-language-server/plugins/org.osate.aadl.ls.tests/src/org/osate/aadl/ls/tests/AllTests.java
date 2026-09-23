@@ -26,6 +26,7 @@ package org.osate.aadl.ls.tests;
 import org.junit.runner.RunWith;
 import org.junit.runners.Suite;
 import org.osate.aadl.ls.commands.CommandUtilTest;
+import org.osate.aadl.ls.tests.lsp.AnnexRefactoringLspTest;
 import org.osate.aadl.ls.tests.lsp.BehaviorAnnexParsingTest;
 import org.osate.aadl.ls.tests.lsp.CommandServiceBusLoadTest;
 import org.osate.aadl.ls.tests.lsp.CommandServiceInstantiateTest;
@@ -54,6 +55,7 @@ import org.osate.aadl.ls.tests.unit.ContributedAadlContentServiceTest;
 		AadlUriExtensionsTest.class,
 		DiagnosticsSmokeTest.class,
 		BehaviorAnnexParsingTest.class,
+		AnnexRefactoringLspTest.class,
 		DocumentSymbolLspTest.class,
 		PredeclaredPropertyDefinitionLspTest.class,
 		CommandServiceBusLoadTest.class,

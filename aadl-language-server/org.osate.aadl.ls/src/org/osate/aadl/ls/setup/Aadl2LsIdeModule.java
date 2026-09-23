@@ -26,21 +26,21 @@ package org.osate.aadl.ls.setup;
 import org.eclipse.xtext.ide.server.ILanguageServerExtension;
 import org.eclipse.xtext.ide.server.UriExtensions;
 import org.eclipse.xtext.ide.server.commands.IExecutableCommandService;
-import org.eclipse.xtext.ide.server.hover.HoverService;
 import org.eclipse.xtext.ide.server.contentassist.ContentAssistService;
+import org.eclipse.xtext.ide.server.hover.HoverService;
 import org.eclipse.xtext.ide.server.symbol.DocumentSymbolMapper;
 import org.osate.aadl.ls.commands.CommandService;
 import org.osate.aadl.ls.services.AadlHoverService;
-import org.osate.aadl.ls.services.EmbeddedBehaviorAnnexContentAssistService;
 import org.osate.aadl.ls.services.AadlLanguageServerExtension;
 import org.osate.aadl.ls.services.AadlSymbolNameProvider;
 import org.osate.aadl.ls.services.AadlUriExtensions;
-import org.osate.xtext.aadl2.ide.AbstractAadl2IdeModule;
+import org.osate.aadl.ls.services.EmbeddedBehaviorAnnexContentAssistService;
+import org.osate.xtext.aadl2.ide.Aadl2IdeModule;
 
 /**
  * Use this class to register ide components.
  */
-public class Aadl2LsIdeModule extends AbstractAadl2IdeModule {
+public class Aadl2LsIdeModule extends Aadl2IdeModule {
 
 	public Class<? extends IExecutableCommandService> bindIExecutableCommandService() {
 		return CommandService.class;
