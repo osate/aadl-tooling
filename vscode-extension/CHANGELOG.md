@@ -27,6 +27,12 @@ All notable changes to the "aadl2" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
+## [0.2.1] - 2026-09-25
+
+- Fix the language server failing to start when the workspace contains a package
+  rename whose target cannot be resolved, for example a package defined in more
+  than one file.
+
 ## [0.2.0] - 2026-09-25
 
 - Bundle an Eclipse Temurin 21 JRE and run the language server with it. The Red

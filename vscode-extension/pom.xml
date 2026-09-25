@@ -30,7 +30,7 @@
 	<parent>
 		<groupId>org.osate</groupId>
 		<artifactId>aadl-language-server-aggregator</artifactId>
-		<version>0.2.0</version>
+		<version>0.2.1</version>
 		<relativePath>../pom.xml</relativePath>
 	</parent>
 
