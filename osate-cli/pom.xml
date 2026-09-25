@@ -45,7 +45,7 @@
 		     the tarball, deb, rpm, and Homebrew package versions.
 		     Keep it a plain release version: rpm forbids '-' in Version, so a
 		     '-SNAPSHOT' suffix would not survive packaging. -->
-		<revision>0.1.0</revision>
+		<revision>0.2.0</revision>
 		<!-- Provenance of the bundled language server and the OSATE it was built
 		     against, reported by 'osate-cli help'. Supplied by
 		     scripts/build-test-release, which is the only place that knows the

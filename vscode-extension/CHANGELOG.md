@@ -27,7 +27,7 @@ All notable changes to the "aadl2" extension will be documented in this file.
 
 Check [Keep a Changelog](http://keepachangelog.com/) for recommendations on how to structure this file.
 
-## [Unreleased]
+## [0.2.0] - 2026-09-25
 
 - Bundle an Eclipse Temurin 21 JRE and run the language server with it. The Red
   Hat Java extension is no longer required or used, and no Java installation on
