@@ -3,7 +3,7 @@
 [![CI](https://github.com/osate/aadl-tooling/actions/workflows/ci.yml/badge.svg)](https://github.com/osate/aadl-tooling/actions/workflows/ci.yml)
 
 Language tooling for the Architecture Analysis & Design Language (AADL), built
-on OSATE 2.19.0 and Xtext.
+on OSATE 2.20.0 and Xtext.`
 
 This repository contains a reusable language server and two ways to work with
 it: a bundled Visual Studio Code extension and a command-line interface.
@@ -18,6 +18,27 @@ and latency, bus-load, and mode reachability analyses.
 | `osate-cli` | You want scriptable validation, instantiation, analysis, or multi-project workspace management | [CLI manual](osate-cli/OSATE-CLI.md) |
 | Language server | You are integrating another LSP client or changing the Java/Xtext implementation | [Server development guide](aadl-language-server/AGENTS.md) |
 
+## OSATE agent skill
+
+The [`osate` skill](skills/osate/SKILL.md) gives AI coding agents guidance for
+using `osate-cli` to validate AADL models, generate instances, run flow latency,
+bus-load, and mode reachability analyses, and manage OSATE project metadata and
+workspace-server sessions.
+
+Install [osate-cli](osate-cli/README.md) and make it available on your `PATH`,
+then load [`skills/osate/`](skills/osate/) using your agent's skill support.
+Include the `references/` directory, which explains the analysis output formats
+and how to interpret the results.
+
+Example requests:
+
+- “Use the osate skill to validate the AADL models in this workspace.”
+- “Use the osate skill to instantiate this system implementation and analyze
+  its flow latency.”
+
+The skill guides the agent to reuse compatible workspace servers, review model
+diagnostics, and verify generated files before reporting success.
+
 ## Repository map
 
 - [`aadl-language-server/`](aadl-language-server/) — the Java/Xtext language server and its
@@ -26,6 +47,8 @@ and latency, bus-load, and mode reachability analyses.
   packages and starts the server.
 - [`osate-cli/`](osate-cli/) — the CLI, long-lived workspace server, assembled
   distribution, and release packaging.
+- [`skills/osate/`](skills/osate/) — the OSATE agent skill and analysis output
+  references for working with AADL models through `osate-cli`.
 - [`osate2/`](osate2/) — the pinned OSATE source submodule used to build the
   parent POM, target platform, and p2 repository consumed by the language server.
 
