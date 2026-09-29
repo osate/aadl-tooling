@@ -246,3 +246,13 @@ jobs:
           fi
           git commit -m "osate-cli ${VERSION}"
           git push -u origin "$branch"
+
+  # The install test downloads the MSIs from the release, so it must come after it.
+  winget:
+    needs: [verify-version, publish]
+    if: github.ref_type == 'tag'
+    uses: ./.github/workflows/publish-winget.yml
+    with:
+      version: ${{ needs.verify-version.outputs.version }}
+    secrets:
+      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}

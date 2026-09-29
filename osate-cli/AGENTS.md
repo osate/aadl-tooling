@@ -35,7 +35,8 @@ marker/session behavior, or lifecycle semantics.
   shaded.
 - `dist/` — assembled launcher, client JAR, workspace-server JAR, and
   language-server plug-ins.
-- `packaging/` — release archives, native packages, and Homebrew metadata.
+- `packaging/` — release archives, native packages, and Homebrew and WinGet
+  metadata.
   See [packaging/README.md](packaging/README.md).
 
 ## Build and tests

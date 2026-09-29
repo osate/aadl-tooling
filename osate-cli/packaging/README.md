@@ -28,6 +28,7 @@ This directory contains release packaging support for:
 - macOS Homebrew tap formulas
 - Linux `.deb` and `.rpm` packages built with nFPM
 - Windows x64 and ARM64 portable ZIPs and MSI installers built with WiX
+- WinGet manifests for the MSIs, published as `OSATE.osate-cli`
 
 The packages bundle Eclipse Temurin Java 21. The existing Maven `dist` layout
 remains the source payload: `osate-cli.jar`, the platform launcher under `bin/`, and the sibling
@@ -58,7 +59,7 @@ The remaining package metadata lives in `metadata.env`:
 - vendor: `CMU/SEI`
 - license: `LicenseRef-BSD-SEI` (SPDX reference to the BSD (SEI)-style license;
   it has no SPDX-listed identifier)
-- homepage: empty for now
+- homepage: `https://github.com/osate/aadl-tooling`
 - Java runtime: Eclipse Temurin feature version `21`
 
 Verify the license metadata before publishing public packages.
@@ -167,10 +168,59 @@ msiexec /i "osate-cli-0.3.0-windows-x64.msi" /qn /norestart INSTALLFOLDER="D:\To
 Stop active CLI workspace servers with `osate-cli <id> -p <port> exit` before
 upgrading or uninstalling so Windows can replace the bundled JARs and runtime.
 
-The MSI assets can be referenced by a future WinGet manifest. For WinGet's
-`--location` option, map the manifest's `InstallerSwitches.InstallLocation` to
-`INSTALLFOLDER="<INSTALLPATH>"`. This repository does not submit manifests to
-`microsoft/winget-pkgs` automatically.
+## WinGet
+
+Once a release's manifests are merged into
+[`microsoft/winget-pkgs`](https://github.com/microsoft/winget-pkgs), users can
+install and upgrade with:
+
+```powershell
+winget install --id OSATE.osate-cli
+winget install osate-cli --location "D:\Tools\OSATE CLI"
+winget upgrade --id OSATE.osate-cli
+```
+
+The manifests use the MSIs, not the ZIPs, so a WinGet installation gets the same PATH
+entry, upgrade behavior and Apps & Features registration as a manual MSI install.
+`--location` maps to the MSI's `INSTALLFOLDER` property.
+
+`generate-winget-manifests.ps1` writes the version, installer and default-locale
+manifests (schema 1.12.0) under
+`packaging/target/recipes/winget/manifests/o/OSATE/osate-cli/<version>/`. It runs
+on Windows because it reads each MSI's ProductCode and UpgradeCode out of the
+MSI itself. WiX assigns a new ProductCode every build, so the manifests must come
+from the very MSIs that are published. The generator also refuses MSIs whose
+name, manufacturer or version disagree with `metadata.env` and their file name,
+because WinGet matches installed copies by those Apps & Features entries.
+
+```powershell
+./osate-cli/packaging/scripts/generate-winget-manifests.ps1 `
+  -MsiDir osate-cli/packaging/target/windows-msi `
+  -BaseUrl https://github.com/osate/aadl-tooling/releases/download/osate-cli-v<version>
+winget validate --manifest osate-cli/packaging/target/recipes/winget/manifests/o/OSATE/osate-cli/<version>
+```
+
+Every CI and release build generates and validates the manifests next to the MSIs.
+After the GitHub release exists, the release workflow calls
+[`publish-winget.yml`](../../.github/workflows/publish-winget.yml). It downloads
+the published MSIs and regenerates the manifests from them, then runs
+`test-winget-manifest.ps1`, which installs from the manifests through WinGet into
+a custom location, checks the PATH entry and version, and uninstalls. Only then
+does it submit the manifests with `wingetcreate submit`, which opens a pull
+request against `microsoft/winget-pkgs`. Microsoft's validation pipeline and
+moderators still have to approve that pull request before `winget install` sees
+the new version. WinGet on GitHub-hosted runners is available only on x64, so
+the ARM64 manifest entry is validated but not installed through WinGet. Its MSI
+is still covered by the native ARM64 smoke test.
+
+To submit a release that is already published, for example one that predates
+WinGet support or whose pull request was closed, dispatch the same workflow from
+`main`. Pass `-f submit=false` to generate and install-test without opening a
+pull request:
+
+```sh
+gh workflow run publish-winget.yml --repo osate/aadl-tooling -f version=0.3.0
+```
 
 ## Packaging tests
 
@@ -202,8 +252,8 @@ Releases are automated. Pushing an `osate-cli-v<version>` tag runs
 [`.github/workflows/release-osate-cli.yml`](../../.github/workflows/release-osate-cli.yml),
 which validates the tag against `<revision>` in `osate-cli/pom.xml`, runs the
 archive builder with `--nfpm`, builds and tests the Windows MSIs, verifies the
-complete artifact set against `SHA256SUMS`, creates the release, and updates the
-Homebrew tap. See
+complete artifact set against `SHA256SUMS`, creates the release, updates the
+Homebrew tap, and submits the WinGet manifests. See
 [RELEASING.md](../../RELEASING.md).
 
 The rest of this section is the manual fallback.

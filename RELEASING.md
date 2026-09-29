@@ -81,6 +81,13 @@ the MSIs from the same checked Windows ZIPs. Native Windows x64 and ARM64 jobs
 must pass ZIP and MSI smoke tests, including custom installation paths and
 uninstall, before any assets publish. The MSI folder chooser defaults to Program
 Files and supports other locations; see [Windows packaging](osate-cli/packaging/README.md#windows-packages).
+The WinGet manifests generated from those MSIs are installed through WinGet
+from the published release, then submitted as a pull request to
+`microsoft/winget-pkgs`; see [WinGet](osate-cli/packaging/README.md#winget).
+The new version reaches `winget install` only after Microsoft's review merges
+that pull request. To submit an already published release, dispatch
+[`publish-winget.yml`](.github/workflows/publish-winget.yml) with
+`-f version=<version>`.
 
 **`vscode-v*`** — [`release-vscode.yml`](.github/workflows/release-vscode.yml)
 
@@ -168,6 +175,7 @@ workflows are usable before any of this is set up.
 | `VSCE_PAT` | VS Code Marketplace | Create an Azure DevOps organization, create a publisher with the ID `osate` at <https://marketplace.visualstudio.com/manage>, then issue a PAT scoped to **Marketplace → Manage** (all accessible organizations). |
 | `OVSX_PAT` | Open VSX | Sign in at <https://open-vsx.org>, claim the `osate` namespace, sign the publisher agreement, and create an access token. |
 | `HOMEBREW_TAP_TOKEN` | Homebrew tap | Create the repository `osate/homebrew-osate`, then a fine-grained PAT with **Contents: read and write** on it. `GITHUB_TOKEN` cannot write to another repository. |
+| `WINGET_TOKEN` | WinGet | A **classic** PAT with the **public_repo** scope (`wingetcreate` does not support fine-grained tokens). The token's account needs no fork up front: `wingetcreate` forks `microsoft/winget-pkgs` into it and opens pull requests from there, so use an account that is allowed to hold that fork. The first submission creates the `OSATE.osate-cli` package and gets a closer review than later updates. |
 
 Add them with `gh secret set VSCE_PAT --repo osate/aadl-tooling`.
 
@@ -183,10 +191,11 @@ gh run watch --repo osate/aadl-tooling
 ```
 
 It authenticates the Marketplace PAT against the `osate` publisher with
-`vsce verify-pat`, checks the Open VSX namespace, and confirms push access to the
-tap. The run summary says which credentials are valid, which are unset, and what
-to fix. It also runs weekly, so an expired token surfaces before a release
-rather than during one.
+`vsce verify-pat`, checks the Open VSX namespace, confirms push access to the
+tap, and checks that the WinGet token is a classic PAT with `public_repo`. The
+run summary says which credentials are valid, which are unset, and what to fix.
+It also runs weekly, so an expired token surfaces before a release rather than
+during one.
 
 To rehearse a release without publishing, dispatch the release workflow itself:
 every publish step is gated on the ref being a tag, so a manual run builds and
