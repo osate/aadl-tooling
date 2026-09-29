@@ -169,6 +169,9 @@ target_platform() {
 		linux-x64 | linux-arm64)
 			printf '%s\n' "linux"
 			;;
+		windows-x64 | windows-arm64)
+			printf '%s\n' "windows"
+			;;
 		*)
 			die "unsupported target: $1"
 			;;
@@ -182,6 +185,9 @@ target_adoptium_os() {
 			;;
 		linux-*)
 			printf '%s\n' "linux"
+			;;
+		windows-*)
+			printf '%s\n' "windows"
 			;;
 		*)
 			die "unsupported target: $1"
@@ -221,6 +227,9 @@ artifact_extension() {
 	case "$1" in
 		macos-* | linux-*)
 			printf '%s\n' "tar.gz"
+			;;
+		windows-*)
+			printf '%s\n' "zip"
 			;;
 		*)
 			die "unsupported target: $1"

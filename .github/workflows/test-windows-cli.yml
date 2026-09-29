@@ -1,0 +1,78 @@
+# Compile both MSI architectures, then run the ZIP and MSI on native runners.
+name: Windows CLI packages
+on:
+  workflow_call:
+    inputs:
+      artifacts-name:
+        description: Workflow artifact containing Windows ZIPs, VERSION and SHA256SUMS.
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  windows-msi:
+    name: Build Windows installers
+    runs-on: windows-2025
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.artifacts-name }}
+          path: osate-cli/packaging/target/artifacts
+      - name: Install WiX
+        shell: pwsh
+        run: |
+          dotnet tool install --tool-path "$env:RUNNER_TEMP/wix" wix --version 5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'WiX installation failed.' }
+          "$env:RUNNER_TEMP/wix" >> $env:GITHUB_PATH
+          & "$env:RUNNER_TEMP/wix/wix.exe" extension add -g WixToolset.UI.wixext/5.0.2
+          if ($LASTEXITCODE -ne 0) { throw 'WiX UI extension installation failed.' }
+      - name: Build MSI installers
+        shell: pwsh
+        run: ./osate-cli/packaging/scripts/build-windows-msi.ps1 -ArtifactsDir osate-cli/packaging/target/artifacts
+      - uses: actions/upload-artifact@v6
+        with:
+          name: osate-cli-windows-msi
+          if-no-files-found: error
+          path: |
+            osate-cli/packaging/target/windows-msi/*.msi
+            osate-cli/packaging/target/windows-msi/SHA256SUMS
+
+  windows-test:
+    name: Test Windows ${{ matrix.arch }} packages
+    needs: windows-msi
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x64
+            runner: windows-2025
+          - arch: arm64
+            runner: windows-11-arm
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: ${{ inputs.artifacts-name }}
+          path: archives
+      - uses: actions/download-artifact@v7
+        with:
+          name: osate-cli-windows-msi
+          path: installers
+      - name: Test portable ZIP, custom MSI location and uninstall
+        shell: pwsh
+        env:
+          TARGET_ARCH: ${{ matrix.arch }}
+        run: |
+          $version = (Get-Content -Raw archives/VERSION).Trim()
+          $base = "osate-cli-$version-windows-$env:TARGET_ARCH"
+          ./osate-cli/packaging/scripts/test-windows-package.ps1 -Zip "archives/$base.zip" -Msi "installers/$base.msi"
+      - name: Upload Windows installer logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: windows-installer-logs-${{ matrix.arch }}
+          path: osate-cli/packaging/target/windows-test-logs

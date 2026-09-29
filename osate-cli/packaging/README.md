@@ -27,9 +27,10 @@ This directory contains release packaging support for:
 
 - macOS Homebrew tap formulas
 - Linux `.deb` and `.rpm` packages built with nFPM
+- Windows x64 and ARM64 portable ZIPs and MSI installers built with WiX
 
 The packages bundle Eclipse Temurin Java 21. The existing Maven `dist` layout
-remains the source payload: `osate-cli.jar`, `bin/osate-cli`, and the sibling
+remains the source payload: `osate-cli.jar`, the platform launcher under `bin/`, and the sibling
 `lib/*.jar` language-server plugins stay together on disk.
 
 ## Version
@@ -37,7 +38,7 @@ remains the source payload: `osate-cli.jar`, `bin/osate-cli`, and the sibling
 The version is declared in exactly one place: the `<revision>` property of
 `osate-cli/pom.xml`. Maven filters it into `org/osate/cli/version.properties`
 inside `osate-cli.jar`, and the packaging scripts read it back out of the jar they
-are packaging. The tarball names, `release.properties`, `.deb`/`.rpm` version,
+are packaging. The archive names, `release.properties`, `.deb`/`.rpm`/`.msi` version,
 Homebrew formula version, and `osate-cli -v` therefore always agree.
 
 To release a new version, bump `<revision>`, rebuild the dist layout, and run the
@@ -77,6 +78,7 @@ The packaging script expects:
 osate-cli/dist/target/dist/
   osate-cli.jar
   bin/osate-cli
+  bin/osate-cli.bat
   lib/*.jar
 ```
 
@@ -92,10 +94,12 @@ Default targets:
 - `macos-arm64`
 - `linux-x64`
 - `linux-arm64`
+- `windows-x64`
+- `windows-arm64`
 
 The script downloads the matching Eclipse Temurin 21 JRE from Adoptium, stages it
-under `runtime/`, rewrites the Unix launcher to use that bundled runtime, and
-writes tarballs under:
+under `runtime/`, writes a launcher that uses that bundled runtime, and creates
+Unix `.tar.gz` archives and Windows `.zip` archives under:
 
 ```text
 osate-cli/packaging/target/artifacts/
@@ -116,23 +120,108 @@ Linux packages install to:
 /usr/bin/osate-cli
 ```
 
+## Windows packages
+
+Each ZIP contains `bin/osate-cli.bat`, the CLI and server JARs, the matching
+Temurin JRE, and the license notices. Extract the whole ZIP and run
+`bin\osate-cli.bat`; Java does not need to be installed separately. Keep the
+runtime and JARs together. Windows uses direct workspace-server launch mode.
+
+To build just the Windows archives on macOS or Linux (requires `zip` and `unzip`):
+
+```sh
+osate-cli/packaging/scripts/build-release-artifacts.sh \
+  --target windows-x64 --target windows-arm64 --no-nfpm
+```
+
+To turn those archives into MSI installers, copy the artifacts directory
+(including `VERSION` and `SHA256SUMS`) to a Windows checkout. With PowerShell 7
+and the .NET 8 SDK, install the pinned WiX tool and UI extension, then run:
+
+```powershell
+dotnet tool install --global wix --version 5.0.2
+wix extension add -g WixToolset.UI.wixext/5.0.2
+./osate-cli/packaging/scripts/build-windows-msi.ps1 `
+  -ArtifactsDir osate-cli/packaging/target/artifacts
+```
+
+The script verifies both ZIP checksums and their versions, then builds
+`osate-cli-<version>-windows-x64.msi` and
+`osate-cli-<version>-windows-arm64.msi` under `packaging/target/windows-msi/`,
+with their own `SHA256SUMS`. MSI versions must have three numeric fields within
+Windows Installer's limits: `0..255`, `0..255`, and `0..65535`.
+
+The installer offers a folder chooser. The default is
+`C:\Program Files\osate-cli`, but users can select another location. It installs
+for all users (requires elevation), adds the selected `bin` directory to the
+machine PATH, and provides standard Windows upgrade and uninstall support.
+Upgrades remember the selected folder. Open a new terminal after installation
+so it sees the updated PATH.
+
+Silent installation also accepts a custom location, for example in cmd.exe:
+
+```bat
+msiexec /i "osate-cli-0.2.1-windows-x64.msi" /qn /norestart INSTALLFOLDER="D:\Tools\OSATE CLI"
+```
+
+Stop active CLI workspace servers with `osate-cli <id> -p <port> exit` before
+upgrading or uninstalling so Windows can replace the bundled JARs and runtime.
+
+The MSI assets can be referenced by a future WinGet manifest. For WinGet's
+`--location` option, map the manifest's `InstallerSwitches.InstallLocation` to
+`INSTALLFOLDER="<INSTALLPATH>"`. This repository does not submit manifests to
+`microsoft/winget-pkgs` automatically.
+
+## Packaging tests
+
+The offline regression suite needs Python 3, Bash, `zip`, `unzip`, and `tar`:
+
+```sh
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s osate-cli/packaging/tests -v
+```
+
+CI and releases compile both MSIs on Windows and then test each ZIP and MSI on
+its native Windows architecture. The test installs into a custom directory
+containing spaces, verifies PATH registration, runs version and error-exit
+checks plus `init`, `ping`, `check`, and `instantiate` using bundled Java, and
+verifies uninstall and PATH restoration. On an elevated PowerShell 7 terminal:
+
+```powershell
+./osate-cli/packaging/scripts/test-windows-package.ps1 `
+  -Zip osate-cli/packaging/target/artifacts/osate-cli-0.2.1-windows-x64.zip `
+  -Msi osate-cli/packaging/target/windows-msi/osate-cli-0.2.1-windows-x64.msi
+```
+
+Use matching ARM64 files on ARM64 Windows. Installer logs are saved under
+`packaging/target/windows-test-logs/`. The interactive folder chooser should also
+be checked manually, including installing and upgrading in a nondefault folder.
+
 ## Publish a GitHub Release
 
 Releases are automated. Pushing an `osate-cli-v<version>` tag runs
 [`.github/workflows/release-osate-cli.yml`](../../.github/workflows/release-osate-cli.yml),
 which validates the tag against `<revision>` in `osate-cli/pom.xml`, runs the
-script below with `--nfpm`, verifies the artifact set against `SHA256SUMS`,
-creates the release, and updates the Homebrew tap. See
+archive builder with `--nfpm`, builds and tests the Windows MSIs, verifies the
+complete artifact set against `SHA256SUMS`, creates the release, and updates the
+Homebrew tap. See
 [RELEASING.md](../../RELEASING.md).
 
 The rest of this section is the manual fallback.
 
 Build every artifact, requiring nFPM so the Linux `.deb` and `.rpm` packages are
-included. Without `--nfpm` a missing nFPM only warns, and four of the eight
-packages are silently dropped:
+included. Without `--nfpm` a missing nFPM only warns, and the four native Linux
+packages are omitted:
 
 ```sh
 osate-cli/packaging/scripts/build-release-artifacts.sh --nfpm
+```
+
+Build and test the MSIs on Windows as described above, then copy the two `.msi`
+files into `packaging/target/artifacts/` and append their checksum file to the
+archive checksum file. Verify that all twelve packages are present:
+
+```sh
+osate-cli/packaging/scripts/verify-release-artifacts.sh
 ```
 
 Create the release for the tag and attach the artifacts. `VERSION` is an internal
@@ -145,7 +234,8 @@ gh release create "osate-cli-v$version" \
   --repo osate/aadl-tooling \
   --title "osate-cli $version" \
   --notes "osate-cli $version" \
-  osate-cli-*.tar.gz osate-cli*.deb osate-cli*.rpm SHA256SUMS
+  osate-cli-*.tar.gz osate-cli-*.zip osate-cli-*.msi \
+  osate-cli*.deb osate-cli*.rpm SHA256SUMS
 ```
 
 To add or replace an artifact on an existing release:

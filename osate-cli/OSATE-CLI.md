@@ -102,7 +102,7 @@ version, so it stays parseable; use `help` for the build provenance.
 The version is declared in exactly one place: the `<revision>` property of
 `osate-cli/pom.xml`. Maven filters it into `org/osate/cli/version.properties` inside
 `osate-cli.jar`, and the packaging scripts read it back out of that jar to version the
-release tarballs, `.deb`, `.rpm`, and Homebrew formula. The version reported here is
+release tarballs, Windows `.zip`/`.msi` packages, `.deb`, `.rpm`, and Homebrew formula. The version reported here is
 therefore always the version of the package the CLI was installed from.
 
 ### Build provenance
