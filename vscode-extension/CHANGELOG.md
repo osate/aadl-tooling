@@ -26,6 +26,12 @@
 Notable user-facing changes to the AADL2 extension and its bundled language
 server are listed by extension release.
 
+## [Unreleased]
+
+### Changed
+
+- Update the bundled OSATE libraries to the 2.21 development version.
+
 ## [0.2.1] - 2026-09-25
 
 ### Fixed
@@ -103,6 +109,7 @@ Initial public pre-release, published as a single universal VSIX.
 
 - Update the bundled AADL language server.
 
+[Unreleased]: https://github.com/osate/aadl-tooling/compare/vscode-v0.2.1...main
 [0.2.1]: https://github.com/osate/aadl-tooling/releases/tag/vscode-v0.2.1
 [0.2.0]: https://github.com/osate/aadl-tooling/releases/tag/vscode-v0.2.0
 [0.1.0]: https://github.com/osate/aadl-tooling/releases/tag/vscode-v0.1.0-pre
