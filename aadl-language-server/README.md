@@ -93,7 +93,8 @@ duplicate language-server bundle versions.
 
 ## Supported language server commands
 
-The server advertises these commands through LSP `workspace/executeCommand`:
+The server advertises these commands through LSP `workspace/executeCommand`,
+including when the client omits the optional execute-command capability:
 
 - `aadl.instantiate` — Instantiate an AADL component implementation and write
   the resulting `.aaxl2` instance model.
@@ -102,6 +103,10 @@ The server advertises these commands through LSP `workspace/executeCommand`:
   generate its CSV report.
 - `aadl.analyze.reachability` — Run SOM mode reachability analysis on an
   instance model, with optional DOT, HTML, and SMV reports.
+
+Unknown commands and missing or blank command names return an LSP `InvalidParams`
+error (`-32602`) with a descriptive message, such as
+`Unknown command: aadl.invalid`. The server remains available for subsequent requests.
 
 ## Related documentation
 

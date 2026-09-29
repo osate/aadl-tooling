@@ -27,14 +27,24 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.regex.Pattern;
 
+import org.eclipse.lsp4j.ClientCapabilities;
 import org.eclipse.lsp4j.Diagnostic;
 import org.eclipse.lsp4j.DidChangeTextDocumentParams;
 import org.eclipse.lsp4j.DidCloseTextDocumentParams;
 import org.eclipse.lsp4j.DidOpenTextDocumentParams;
+import org.eclipse.lsp4j.ExecuteCommandCapabilities;
+import org.eclipse.lsp4j.ExecuteCommandParams;
+import org.eclipse.lsp4j.InitializeParams;
 import org.eclipse.lsp4j.Position;
 import org.eclipse.lsp4j.Range;
+import org.eclipse.lsp4j.ServerCapabilities;
+import org.eclipse.lsp4j.WorkspaceClientCapabilities;
+import org.eclipse.lsp4j.jsonrpc.ResponseErrorException;
+import org.eclipse.lsp4j.jsonrpc.messages.ResponseError;
+import org.eclipse.lsp4j.jsonrpc.messages.ResponseErrorCode;
 import org.eclipse.xtext.ide.server.Document;
 import org.eclipse.xtext.ide.server.LanguageServerImpl;
+import org.eclipse.xtext.util.CancelIndicator;
 import org.eclipse.xtext.validation.Issue;
 
 /**
@@ -44,6 +54,39 @@ public class AadlLanguageServer extends LanguageServerImpl {
 	private static final Pattern OFFENDING_INPUT = Pattern.compile("\\binput\\s+'([^'\\r\\n]+)'");
 
 	private final Map<String, Document> openDocuments = new ConcurrentHashMap<>();
+
+	@Override
+	protected ServerCapabilities createServerCapabilities(InitializeParams params) {
+		// Xtext requires the optional executeCommand capability to initialize its
+		// registry. Default to static registration when the client omits it.
+		if (params.getCapabilities() == null) {
+			params.setCapabilities(new ClientCapabilities());
+		}
+		var clientCapabilities = params.getCapabilities();
+		if (clientCapabilities.getWorkspace() == null) {
+			clientCapabilities.setWorkspace(new WorkspaceClientCapabilities());
+		}
+		var workspace = clientCapabilities.getWorkspace();
+		if (workspace.getExecuteCommand() == null) {
+			workspace.setExecuteCommand(new ExecuteCommandCapabilities(false));
+		}
+		return super.createServerCapabilities(params);
+	}
+
+	@Override
+	protected Object executeCommand(ExecuteCommandParams params, CancelIndicator cancelIndicator) {
+		if (params == null || params.getCommand() == null || params.getCommand().isBlank()) {
+			throw new ResponseErrorException(
+					new ResponseError(ResponseErrorCode.InvalidParams, "A command name is required", null));
+		}
+		// Unknown commands never reach CommandService: Xtext's registry silently
+		// returns null when it cannot find a handler.
+		if (!getCommandRegistry().getCommands().contains(params.getCommand())) {
+			throw new ResponseErrorException(new ResponseError(ResponseErrorCode.InvalidParams,
+					"Unknown command: " + params.getCommand(), null));
+		}
+		return super.executeCommand(params, cancelIndicator);
+	}
 
 	@Override
 	public void didOpen(DidOpenTextDocumentParams params) {
