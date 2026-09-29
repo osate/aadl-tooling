@@ -29,7 +29,7 @@ source "$script_dir/common.sh"
 # shellcheck source=../../../scripts/lib/temurin.sh
 source "$repo_root/scripts/lib/temurin.sh"
 
-default_targets=(macos-x64 macos-arm64 linux-x64 linux-arm64)
+default_targets=(macos-x64 macos-arm64 linux-x64 linux-arm64 windows-x64 windows-arm64)
 targets=()
 dist_dir="$repo_root/osate-cli/dist/target/dist"
 output_dir="$packaging_dir/target"
@@ -41,7 +41,7 @@ usage() {
 	cat <<EOF
 usage: $(basename "$0") [options]
 
-Build macOS/Linux architecture-specific osate-cli release artifacts with bundled
+Build macOS/Linux/Windows architecture-specific osate-cli release artifacts with bundled
 Eclipse Temurin Java, plus Linux deb/rpm packages when nFPM is available.
 
 Options:
@@ -63,7 +63,7 @@ the <revision> property in osate-cli/pom.xml. It therefore always matches the ve
 reported by 'osate-cli -v'.
 
 Targets:
-  macos-x64, macos-arm64, linux-x64, linux-arm64
+  macos-x64, macos-arm64, linux-x64, linux-arm64, windows-x64, windows-arm64
 EOF
 }
 
@@ -126,6 +126,11 @@ fi
 if [ ! -d "$dist_dir/lib" ]; then
 	die "lib directory not found in $dist_dir. The osate-cli dist layout is incomplete."
 fi
+# Archive commands run from the staging directory, so keep user-supplied paths
+# absolute (including paths containing spaces).
+dist_dir=$(cd "$dist_dir" && pwd)
+mkdir -p "$output_dir"
+output_dir=$(cd "$output_dir" && pwd)
 
 OSATE_CLI_VERSION=$(version_from_dist "$dist_dir")
 if [ -n "$expect_version" ] && [ "$expect_version" != "$OSATE_CLI_VERSION" ]; then
@@ -171,9 +176,12 @@ extract_runtime() {
 	local archive=$2
 	local extract_dir=$3
 	local runtime_dir=$4
-	local runtime_home
+	local runtime_home java_exe=java
 
-	runtime_home=$(temurin_unpack "$archive" "$extract_dir" java)
+	if [ "$(target_platform "$target")" = windows ]; then
+		java_exe=java.exe
+	fi
+	runtime_home=$(temurin_unpack "$archive" "$extract_dir" "$java_exe")
 
 	rm -rf "$runtime_dir"
 	mkdir -p "$runtime_dir"
@@ -188,6 +196,18 @@ DIR=$(cd "$(dirname "$0")" && pwd)
 exec "$DIR/../runtime/bin/java" -jar "$DIR/../osate-cli.jar" "$@"
 EOF
 	chmod 755 "$file"
+}
+
+write_windows_launcher() {
+	local file=$1
+	# CRLF lets cmd.exe run the same launcher whether the ZIP was built on Unix
+	# or Windows. Disable delayed expansion to preserve exclamation marks in paths.
+	awk '{ printf "%s\r\n", $0 }' > "$file" <<'EOF'
+@echo off
+setlocal DisableDelayedExpansion
+"%~dp0..\runtime\bin\java.exe" -jar "%~dp0..\osate-cli.jar" %*
+exit /b %errorlevel%
+EOF
 }
 
 write_release_properties() {
@@ -232,17 +252,26 @@ assemble_payload() {
 	extract_runtime "$target" "$download_archive" "$extract_dir" "$payload_dir/runtime"
 
 	mkdir -p "$payload_dir/bin"
-	write_unix_launcher "$payload_dir/bin/osate-cli"
-	rm -f "$payload_dir/bin/osate-cli.bat"
+	if [ "$(target_platform "$target")" = windows ]; then
+		write_windows_launcher "$payload_dir/bin/osate-cli.bat"
+		rm -f "$payload_dir/bin/osate-cli"
+	else
+		write_unix_launcher "$payload_dir/bin/osate-cli"
+		rm -f "$payload_dir/bin/osate-cli.bat"
+	fi
 	write_release_properties "$target" "$payload_dir/release.properties"
 	copy_notice_files "$payload_dir"
 
-	require_command tar
-	archive="$artifacts_dir/$base.tar.gz"
+	archive="$artifacts_dir/$base.$ext"
 	rm -f "$archive"
-	(cd "$staging_dir" && tar -czf "$archive" "$base")
+	if [ "$ext" = zip ]; then
+		require_command zip
+		(cd "$staging_dir" && zip -qr "$archive" "$base")
+	else
+		require_command tar
+		(cd "$staging_dir" && tar -czf "$archive" "$base")
+	fi
 
-	printf '%s\n' "$payload_dir"
 }
 
 write_nfpm_config() {
@@ -329,7 +358,10 @@ write_checksums() {
 
 for target in "${targets[@]}"; do
 	echo "Assembling $target"
-	payload_dir=$(assemble_payload "$target")
+	# Keep assembly outside command substitution: Bash otherwise clears errexit
+	# inside it and a failed runtime extraction could leave a publishable archive.
+	assemble_payload "$target"
+	payload_dir="$staging_dir/$(artifact_basename "$target")"
 	if [ "$nfpm_mode" != "skip" ]; then
 		build_nfpm_packages "$target" "$payload_dir"
 	fi

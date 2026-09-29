@@ -53,19 +53,13 @@ jobs:
   # run the packaging scripts, so calling the reusable build workflow as well
   # meant building the language server, extension and CLI twice per release.
   package:
-    name: Build, package and publish
+    name: Build and package archives
     needs: verify-version
     runs-on: ubuntu-latest
     timeout-minutes: 150
-    permissions:
-      contents: write
     env:
       MAVEN_OPTS: -Xmx4g
       VERSION: ${{ needs.verify-version.outputs.version }}
-      # Job-level so the publish step's `if` can test it; a step cannot read its
-      # own env block from its `if` expression.
-      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
-      TAP_REPO: osate/homebrew-osate
     steps:
       - uses: actions/checkout@v5
         with:
@@ -119,7 +113,7 @@ jobs:
             -Djavadoc=false -DfailIfNoTests=false \
             clean install
 
-      # The four bundled JREs, ~190 MB from Adoptium on every release otherwise.
+      # The six bundled JREs, including Windows x64 and ARM64.
       # Keyed on the helper that owns the feature version and shared in spirit with
       # build.yml's cache; the paths differ because each packaging path keeps its
       # own download directory. Loose reuse is safe: the helper verifies every
@@ -136,7 +130,7 @@ jobs:
         run: ./scripts/build-test-release --skip-osate --skip-extension
 
       # build-release-artifacts.sh defaults to "auto" and would degrade to a
-      # warning, silently shipping 4 of 8 packages. --nfpm below makes it fatal,
+      # warning, silently dropping the four Linux native packages. --nfpm below makes it fatal,
       # so nfpm has to be present.
       - name: Install nfpm
         run: |
@@ -148,26 +142,8 @@ jobs:
       - name: Build release artifacts
         run: osate-cli/packaging/scripts/build-release-artifacts.sh --nfpm
 
-      - name: Check the artifact set
-        run: |
-          cd osate-cli/packaging/target/artifacts
-          ls -l
-          for f in \
-            "osate-cli-${VERSION}-linux-x64.tar.gz" \
-            "osate-cli-${VERSION}-linux-arm64.tar.gz" \
-            "osate-cli-${VERSION}-macos-x64.tar.gz" \
-            "osate-cli-${VERSION}-macos-arm64.tar.gz" \
-            "osate-cli_${VERSION}_amd64.deb" \
-            "osate-cli_${VERSION}_arm64.deb" \
-            "osate-cli-${VERSION}-1.x86_64.rpm" \
-            "osate-cli-${VERSION}-1.aarch64.rpm" \
-            SHA256SUMS; do
-            if [ ! -f "$f" ]; then
-              echo "Missing release artifact: $f" >&2
-              exit 1
-            fi
-          done
-          sha256sum -c SHA256SUMS
+      - name: Check the archive artifact set
+        run: osate-cli/packaging/scripts/verify-release-artifacts.sh --without-msi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
@@ -175,6 +151,39 @@ jobs:
           name: osate-cli-release-${{ env.VERSION }}
           if-no-files-found: error
           path: osate-cli/packaging/target/artifacts
+
+  windows:
+    needs: [verify-version, package]
+    uses: ./.github/workflows/test-windows-cli.yml
+    with:
+      artifacts-name: osate-cli-release-${{ needs.verify-version.outputs.version }}
+
+  publish:
+    name: Publish tested packages
+    needs: [verify-version, package, windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ needs.verify-version.outputs.version }}
+      TAP_TOKEN: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+      TAP_REPO: osate/homebrew-osate
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: osate-cli-release-${{ env.VERSION }}
+          path: osate-cli/packaging/target/artifacts
+      - uses: actions/download-artifact@v7
+        with:
+          name: osate-cli-windows-msi
+          path: osate-cli/packaging/target/windows-msi
+      - name: Combine and verify the complete release
+        run: |
+          cp osate-cli/packaging/target/windows-msi/*.msi osate-cli/packaging/target/artifacts/
+          cat osate-cli/packaging/target/windows-msi/SHA256SUMS >> osate-cli/packaging/target/artifacts/SHA256SUMS
+          osate-cli/packaging/scripts/verify-release-artifacts.sh
 
       # VERSION is an internal handoff to the formula generator, not an asset.
       - name: Create the GitHub release

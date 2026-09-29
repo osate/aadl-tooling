@@ -40,7 +40,7 @@ the same workspace reuse a warm model index. Local `project` commands manage
 - [AGENTS.md](AGENTS.md) — development guide: module layout, build and test
   commands, runtime invariants, and the change checklist.
 - [packaging/README.md](packaging/README.md) — release archives, `.deb`/`.rpm`
-  packages, Homebrew formula, and how to publish a GitHub release.
+  packages, Windows ZIPs/MSIs, Homebrew formula, and release publication.
 - [osate-cli/manual-test.md](osate-cli/manual-test.md) — the manual test plan
   for behavior that automated tests cannot cover.
 

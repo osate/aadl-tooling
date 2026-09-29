@@ -48,6 +48,47 @@ jobs:
       test-extension: true
       upload-artifacts: true
 
+  packaging-checks:
+    name: Packaging regression tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v5
+      - run: python3 -m unittest discover -s osate-cli/packaging/tests -v
+        env:
+          PYTHONDONTWRITEBYTECODE: "1"
+
+  windows-archives:
+    name: Package Windows CLI archives
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v7
+        with:
+          name: osate-cli-dist
+          path: osate-cli/dist/target/dist
+      - uses: actions/cache@v5
+        with:
+          path: osate-cli/packaging/target/downloads
+          key: temurin-cli-${{ runner.os }}-${{ hashFiles('scripts/lib/temurin.sh') }}
+          restore-keys: |
+            temurin-cli-${{ runner.os }}-
+      - run: osate-cli/packaging/scripts/build-release-artifacts.sh --target windows-x64 --target windows-arm64 --no-nfpm
+      - uses: actions/upload-artifact@v6
+        with:
+          name: osate-cli-windows-archives
+          if-no-files-found: error
+          retention-days: 7
+          path: osate-cli/packaging/target/artifacts
+
+  windows:
+    needs: windows-archives
+    uses: ./.github/workflows/test-windows-cli.yml
+    with:
+      artifacts-name: osate-cli-windows-archives
+
   # Cache keys are immutable, so every moved submodule pin leaves an OSATE entry
   # behind and every pom change leaves a ~900 MB Maven entry behind. Against a
   # 10 GB per-repository limit that would evict the entries we actually want, so

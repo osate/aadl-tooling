@@ -71,11 +71,16 @@ versions must stay `major.minor.patch` — and move it only when they release.
 **`osate-cli-v*`** — [`release-osate-cli.yml`](.github/workflows/release-osate-cli.yml)
 
 Four platform tarballs (linux-x64, linux-arm64, macos-x64, macos-arm64), two
-`.deb`, two `.rpm`, and `SHA256SUMS`, all attached to a GitHub Release. The
+Windows ZIPs and two MSI installers (x64 and ARM64), two `.deb`, two `.rpm`, and
+`SHA256SUMS`, all attached to a GitHub Release. The
 workflow then regenerates the Homebrew formula against the release's download
 prefix and pushes it to the tap. Every artifact is checked for presence and
 verified against `SHA256SUMS` before publishing; `nfpm` is installed and required
-so a missing packager cannot silently drop the four Linux packages.
+so a missing packager cannot silently drop the four Linux packages. WiX builds
+the MSIs from the same checked Windows ZIPs. Native Windows x64 and ARM64 jobs
+must pass ZIP and MSI smoke tests, including custom installation paths and
+uninstall, before any assets publish. The MSI folder chooser defaults to Program
+Files and supports other locations; see [Windows packaging](osate-cli/packaging/README.md#windows-packages).
 
 **`vscode-v*`** — [`release-vscode.yml`](.github/workflows/release-vscode.yml)
 
@@ -197,8 +202,8 @@ gh workflow run release-osate-cli.yml --repo osate/aadl-tooling --ref main
   records the tooling commit, the OSATE commit and gitlink, and all three
   versions, so a released artifact can always be traced back to its exact inputs.
 - macOS **tarballs** are unsigned and not notarized. Downloads through a browser
-  will be quarantined by Gatekeeper; the Homebrew path is not affected. The `.deb`
-  and `.rpm` packages are unsigned too. This does not apply to the VS Code
+  will be quarantined by Gatekeeper; the Homebrew path is not affected. The `.deb`,
+  `.rpm`, and Windows `.msi` packages are unsigned too. This does not apply to the VS Code
   packages: Adoptium's own per-binary signatures travel inside the JRE, and VS
   Code does not quarantine the files it extracts from a VSIX.
 - The bundled JREs are verified against Adoptium's published checksums at build
