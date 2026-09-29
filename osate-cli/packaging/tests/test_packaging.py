@@ -174,6 +174,11 @@ class PackagingTest(unittest.TestCase):
                    "--artifacts-dir", str(artifacts)]
         result = subprocess.run(command, cwd=REPO, text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+        # The MSI checksums are written on Windows and appended to the Linux list.
+        with checksum_file.open("w", newline="") as mixed:
+            mixed.write("".join(s if ".msi" not in s else s.replace("\n", "\r\n") for s in sums))
+        result = subprocess.run(command, cwd=REPO, text=True, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
         # A hash file that simply omits an asset must not make that asset pass.
         checksum_file.write_text("".join(s for s in sums if "windows-arm64.msi" not in s))
         result = subprocess.run(command, cwd=REPO, text=True, capture_output=True)

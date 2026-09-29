@@ -109,4 +109,6 @@ foreach ($arch in 'x64', 'arm64') {
         if (Test-Path -LiteralPath $scratch) { Remove-Item -LiteralPath $scratch -Recurse -Force }
     }
 }
-$checksums | Set-Content -LiteralPath "$OutputDir/SHA256SUMS" -Encoding ascii
+# LF, not Set-Content's CRLF: the release job appends this to the Linux-built
+# SHA256SUMS and reads it with awk, which would keep the CR in the file name.
+[IO.File]::WriteAllText("$OutputDir/SHA256SUMS", (($checksums -join "`n") + "`n"))
