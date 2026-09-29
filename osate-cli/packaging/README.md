@@ -161,7 +161,7 @@ so it sees the updated PATH.
 Silent installation also accepts a custom location, for example in cmd.exe:
 
 ```bat
-msiexec /i "osate-cli-0.2.1-windows-x64.msi" /qn /norestart INSTALLFOLDER="D:\Tools\OSATE CLI"
+msiexec /i "osate-cli-0.3.0-windows-x64.msi" /qn /norestart INSTALLFOLDER="D:\Tools\OSATE CLI"
 ```
 
 Stop active CLI workspace servers with `osate-cli <id> -p <port> exit` before
@@ -188,8 +188,8 @@ verifies uninstall and PATH restoration. On an elevated PowerShell 7 terminal:
 
 ```powershell
 ./osate-cli/packaging/scripts/test-windows-package.ps1 `
-  -Zip osate-cli/packaging/target/artifacts/osate-cli-0.2.1-windows-x64.zip `
-  -Msi osate-cli/packaging/target/windows-msi/osate-cli-0.2.1-windows-x64.msi
+  -Zip osate-cli/packaging/target/artifacts/osate-cli-0.3.0-windows-x64.zip `
+  -Msi osate-cli/packaging/target/windows-msi/osate-cli-0.3.0-windows-x64.msi
 ```
 
 Use matching ARM64 files on ARM64 Windows. Installer logs are saved under
