@@ -35,6 +35,7 @@ import org.osate.aadl.ls.tests.lsp.CommandServiceReachabilityTest;
 import org.osate.aadl.ls.tests.lsp.DiagnosticsSmokeTest;
 import org.osate.aadl.ls.tests.lsp.DocumentSymbolLspTest;
 import org.osate.aadl.ls.tests.lsp.Emv2ParsingTest;
+import org.osate.aadl.ls.tests.lsp.InvalidCommandLspTest;
 import org.osate.aadl.ls.tests.lsp.MultiRootLinkingTest;
 import org.osate.aadl.ls.tests.lsp.PredeclaredPropertyDefinitionLspTest;
 import org.osate.aadl.ls.tests.unit.Aadl2LsGlobalScopeProviderTest;
@@ -44,6 +45,9 @@ import org.osate.aadl.ls.tests.unit.AadlUriExtensionsTest;
 import org.osate.aadl.ls.tests.unit.CommandServiceInitializeTest;
 import org.osate.aadl.ls.tests.unit.ContributedAadlContentServiceTest;
 
+/**
+ * Runs every language-server test once, including command error regressions.
+ */
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
 		CommandUtilTest.class,
@@ -62,6 +66,7 @@ import org.osate.aadl.ls.tests.unit.ContributedAadlContentServiceTest;
 		CommandServiceLatencyTest.class,
 		CommandServiceReachabilityTest.class,
 		CommandServiceInstantiateTest.class,
+		InvalidCommandLspTest.class,
 		MultiRootLinkingTest.class,
 		Emv2ParsingTest.class
 })
