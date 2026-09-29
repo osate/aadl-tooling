@@ -49,8 +49,12 @@ $installDir = Join-Path $env:SystemDrive "osate-cli winget test $([guid]::NewGui
 Invoke-Winget @('validate', '--manifest', $ManifestDir)
 Invoke-Winget @('settings', '--enable', 'LocalManifestFiles')
 # --location exercises the manifest's InstallLocation switch, not just the default.
+# Uninstalling by manifest queries the configured sources to correlate the
+# installed package, and msstore cancels non-interactive runs whose source
+# agreement is not accepted. Accept it on install too, for newer clients.
 Invoke-Winget @('install', '--manifest', $ManifestDir, '--silent', '--accept-package-agreements',
-    '--disable-interactivity', '--location', $installDir, '--log', "$LogDir/winget-install.log")
+    '--accept-source-agreements', '--disable-interactivity', '--location', $installDir,
+    '--log', "$LogDir/winget-install.log")
 try {
     $launcher = "$installDir/bin/osate-cli.bat"
     if (-not (Test-Path -LiteralPath $launcher)) { throw "WinGet did not install into $installDir" }
@@ -61,7 +65,7 @@ try {
     if ($reported -ne "osate-cli $version") { throw "Installed launcher reported '$reported'" }
     Write-Host "Passed WinGet install of $version into $installDir"
 } finally {
-    Invoke-Winget @('uninstall', '--manifest', $ManifestDir, '--silent',
+    Invoke-Winget @('uninstall', '--manifest', $ManifestDir, '--silent', '--accept-source-agreements',
         '--disable-interactivity', '--log', "$LogDir/winget-uninstall.log")
 }
 if (Test-Path -LiteralPath "$installDir/bin/osate-cli.bat") { throw 'WinGet uninstall left the launcher behind.' }
