@@ -185,7 +185,7 @@ entry, upgrade behavior and Apps & Features registration as a manual MSI install
 `--location` maps to the MSI's `INSTALLFOLDER` property.
 
 `generate-winget-manifests.ps1` writes the version, installer and default-locale
-manifests (schema 1.12.0) under
+manifests (schema 1.10.0, which older WinGet clients still validate) under
 `packaging/target/recipes/winget/manifests/o/OSATE/osate-cli/<version>/`. It runs
 on Windows because it reads each MSI's ProductCode and UpgradeCode out of the
 MSI itself. WiX assigns a new ProductCode every build, so the manifests must come

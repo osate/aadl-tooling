@@ -35,7 +35,10 @@ Set-StrictMode -Version Latest
 
 if (-not $IsWindows) { throw 'Reading MSI properties requires Windows and PowerShell 7.' }
 $PackageIdentifier = 'OSATE.osate-cli'
-$ManifestVersion = '1.12.0'
+# 1.10.0, not the newest schema: WinGet validates a manifest against the newest
+# schema it knows, so a client older than the manifest reports a header mismatch.
+# The GitHub Windows runners ship such a client.
+$ManifestVersion = '1.10.0'
 $MsiDir = (Resolve-Path -LiteralPath $MsiDir).Path
 $BaseUrl = $BaseUrl.TrimEnd('/')
 

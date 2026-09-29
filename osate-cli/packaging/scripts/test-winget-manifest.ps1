@@ -45,6 +45,7 @@ $version = (Get-Content -Raw -LiteralPath (Get-ChildItem -LiteralPath $ManifestD
 # Not under TEMP: its 8.3 short name would not match the PATH entry literally.
 $installDir = Join-Path $env:SystemDrive "osate-cli winget test $([guid]::NewGuid())"
 
+& winget --version
 Invoke-Winget @('validate', '--manifest', $ManifestDir)
 Invoke-Winget @('settings', '--enable', 'LocalManifestFiles')
 # --location exercises the manifest's InstallLocation switch, not just the default.

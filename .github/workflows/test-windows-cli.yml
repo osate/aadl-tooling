@@ -42,6 +42,7 @@ jobs:
             -MsiDir osate-cli/packaging/target/windows-msi `
             -BaseUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag" `
             -ReleaseNotesUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$tag"
+          winget --version
           winget validate --manifest "osate-cli/packaging/target/recipes/winget/manifests/o/OSATE/osate-cli/$version"
       - uses: actions/upload-artifact@v6
         with:
