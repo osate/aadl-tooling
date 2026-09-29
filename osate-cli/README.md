@@ -40,7 +40,8 @@ the same workspace reuse a warm model index. Local `project` commands manage
 - [AGENTS.md](AGENTS.md) — development guide: module layout, build and test
   commands, runtime invariants, and the change checklist.
 - [packaging/README.md](packaging/README.md) — release archives, `.deb`/`.rpm`
-  packages, Windows ZIPs/MSIs, Homebrew formula, and release publication.
+  packages, Windows ZIPs/MSIs, Homebrew formula, WinGet manifests, and release
+  publication.
 - [osate-cli/manual-test.md](osate-cli/manual-test.md) — the manual test plan
   for behavior that automated tests cannot cover.
 
@@ -51,7 +52,8 @@ the same workspace reuse a warm model index. Local `project` commands manage
   shaded, because Xtext resource loading requires on-disk `file:` URLs.
 - `dist/` — the assembled runnable layout: launcher, client JAR,
   workspace-server JAR, and language-server plug-ins.
-- `packaging/` — release archives, native packages, and Homebrew metadata.
+- `packaging/` — release archives, native packages, and Homebrew and WinGet
+  metadata.
 
 ## Build
 

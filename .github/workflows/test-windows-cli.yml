@@ -31,6 +31,19 @@ jobs:
       - name: Build MSI installers
         shell: pwsh
         run: ./osate-cli/packaging/scripts/build-windows-msi.ps1 -ArtifactsDir osate-cli/packaging/target/artifacts
+      # The URLs point at the release this version would be published as. Only a
+      # release run ever makes them live; everywhere else this checks the schema.
+      - name: Generate and validate WinGet manifests
+        shell: pwsh
+        run: |
+          $version = (Get-Content -Raw osate-cli/packaging/target/artifacts/VERSION).Trim()
+          $tag = "osate-cli-v$version"
+          ./osate-cli/packaging/scripts/generate-winget-manifests.ps1 `
+            -MsiDir osate-cli/packaging/target/windows-msi `
+            -BaseUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$tag" `
+            -ReleaseNotesUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$tag"
+          winget --version
+          winget validate --manifest "osate-cli/packaging/target/recipes/winget/manifests/o/OSATE/osate-cli/$version"
       - uses: actions/upload-artifact@v6
         with:
           name: osate-cli-windows-msi
@@ -38,6 +51,11 @@ jobs:
           path: |
             osate-cli/packaging/target/windows-msi/*.msi
             osate-cli/packaging/target/windows-msi/SHA256SUMS
+      - uses: actions/upload-artifact@v6
+        with:
+          name: osate-cli-winget-manifests
+          if-no-files-found: error
+          path: osate-cli/packaging/target/recipes/winget
 
   windows-test:
     name: Test Windows ${{ matrix.arch }} packages

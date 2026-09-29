@@ -1,0 +1,109 @@
+# Submits a published osate-cli release to WinGet.
+#
+# release-osate-cli.yml calls this once the GitHub release exists. Dispatch it by
+# hand to submit a release published before WinGet support, or to resubmit one
+# whose winget-pkgs pull request was closed:
+#
+#   gh workflow run publish-winget.yml --repo osate/aadl-tooling -f version=0.3.0
+#
+# Both paths work from the published assets rather than a build artifact, so the
+# manifests always describe exactly the MSIs users download.
+
+name: Publish osate-cli to WinGet
+
+on:
+  workflow_call:
+    inputs:
+      version:
+        required: true
+        type: string
+      submit:
+        type: boolean
+        default: true
+    secrets:
+      WINGET_TOKEN:
+        required: false
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Published osate-cli version, e.g. 0.3.0
+        required: true
+        type: string
+      submit:
+        description: Open the winget-pkgs pull request; otherwise only generate and install-test
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+jobs:
+  winget:
+    name: Submit to WinGet
+    # WinGet is preinstalled only on the x64 Windows images.
+    runs-on: windows-2025
+    timeout-minutes: 20
+    env:
+      VERSION: ${{ inputs.version }}
+      TAG: osate-cli-v${{ inputs.version }}
+      # wingetcreate forks microsoft/winget-pkgs into the token owner's account and
+      # opens the pull request from there. Needs a classic PAT with public_repo;
+      # fine-grained tokens are not supported. Skipped cleanly until configured.
+      WINGET_CREATE_GITHUB_TOKEN: ${{ secrets.WINGET_TOKEN }}
+      WINGETCREATE_VERSION: "1.12.13.0"
+      WINGETCREATE_SHA256: "24042BD37915805615E6CF969AC57C6439124C3FE85823327F5F3FB24BD9FFEA"
+    steps:
+      # The caller's ref: the release tag, or whatever a dispatch ran on. A release
+      # that predates WinGet support has no scripts at its tag, so dispatch those
+      # from main.
+      - uses: actions/checkout@v5
+
+      - name: Download the published MSIs
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ($env:VERSION -notmatch '^\d+\.\d+\.\d+$') { throw "Not a release version: $env:VERSION" }
+          gh release download $env:TAG --repo $env:GITHUB_REPOSITORY --dir release `
+            --pattern '*.msi' --pattern SHA256SUMS
+          if ($LASTEXITCODE -ne 0) { throw "Could not download the $env:TAG release assets." }
+
+      - name: Generate the manifests
+        shell: pwsh
+        run: |
+          ./osate-cli/packaging/scripts/generate-winget-manifests.ps1 -MsiDir release `
+            -BaseUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/download/$env:TAG" `
+            -ReleaseNotesUrl "https://github.com/$env:GITHUB_REPOSITORY/releases/tag/$env:TAG"
+
+      - name: Install from the published release through WinGet
+        shell: pwsh
+        run: |
+          ./osate-cli/packaging/scripts/test-winget-manifest.ps1 `
+            -ManifestDir "osate-cli/packaging/target/recipes/winget/manifests/o/OSATE/osate-cli/$env:VERSION"
+
+      - name: Upload manifests and WinGet logs
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: osate-cli-winget-${{ inputs.version }}
+          path: |
+            osate-cli/packaging/target/recipes/winget
+            osate-cli/packaging/target/windows-test-logs
+
+      - name: Submit the manifests to microsoft/winget-pkgs
+        if: inputs.submit && env.WINGET_CREATE_GITHUB_TOKEN != ''
+        shell: pwsh
+        run: |
+          $exe = "$env:RUNNER_TEMP/wingetcreate.exe"
+          Invoke-WebRequest -OutFile $exe `
+            "https://github.com/microsoft/winget-create/releases/download/v$env:WINGETCREATE_VERSION/wingetcreate.exe"
+          if ((Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash -ne $env:WINGETCREATE_SHA256) {
+            throw 'wingetcreate.exe does not match its pinned checksum.'
+          }
+          & $exe submit --no-open --prtitle "OSATE.osate-cli version $env:VERSION" `
+            "osate-cli/packaging/target/recipes/winget/manifests/o/OSATE/osate-cli/$env:VERSION"
+
+      - name: Report a skipped submission
+        if: inputs.submit && env.WINGET_CREATE_GITHUB_TOKEN == ''
+        shell: pwsh
+        run: '"➖ WINGET_TOKEN is not set; the WinGet submission was skipped." >> $env:GITHUB_STEP_SUMMARY'
