@@ -150,7 +150,8 @@ sha256_file() {
 artifact_sha256() {
 	local sums_file=$1
 	local artifact_name=$2
-	awk -v artifact="$artifact_name" '$2 == artifact { print $1 }' "$sums_file"
+	# Tolerate CRLF so a checksum file written on Windows cannot hide its entries.
+	awk -v artifact="$artifact_name" '{ sub(/\r$/, "") } $2 == artifact { print $1 }' "$sums_file"
 }
 
 strip_trailing_slash() {
