@@ -113,7 +113,7 @@ jobs:
             -Djavadoc=false -DfailIfNoTests=false \
             clean install
 
-      # The six bundled JREs, including Windows x64 and ARM64.
+      # The four bundled JREs for macOS and Linux x64 and ARM64.
       # Keyed on the helper that owns the feature version and shared in spirit with
       # build.yml's cache; the paths differ because each packaging path keeps its
       # own download directory. Loose reuse is safe: the helper verifies every
@@ -142,8 +142,8 @@ jobs:
       - name: Build release artifacts
         run: osate-cli/packaging/scripts/build-release-artifacts.sh --nfpm
 
-      - name: Check the archive artifact set
-        run: osate-cli/packaging/scripts/verify-release-artifacts.sh --without-msi
+      - name: Check the release artifact set
+        run: osate-cli/packaging/scripts/verify-release-artifacts.sh
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v6
@@ -152,15 +152,9 @@ jobs:
           if-no-files-found: error
           path: osate-cli/packaging/target/artifacts
 
-  windows:
-    needs: [verify-version, package]
-    uses: ./.github/workflows/test-windows-cli.yml
-    with:
-      artifacts-name: osate-cli-release-${{ needs.verify-version.outputs.version }}
-
   publish:
     name: Publish tested packages
-    needs: [verify-version, package, windows]
+    needs: [verify-version, package]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -175,15 +169,8 @@ jobs:
         with:
           name: osate-cli-release-${{ env.VERSION }}
           path: osate-cli/packaging/target/artifacts
-      - uses: actions/download-artifact@v7
-        with:
-          name: osate-cli-windows-msi
-          path: osate-cli/packaging/target/windows-msi
-      - name: Combine and verify the complete release
-        run: |
-          cp osate-cli/packaging/target/windows-msi/*.msi osate-cli/packaging/target/artifacts/
-          cat osate-cli/packaging/target/windows-msi/SHA256SUMS >> osate-cli/packaging/target/artifacts/SHA256SUMS
-          osate-cli/packaging/scripts/verify-release-artifacts.sh
+      - name: Verify the complete release
+        run: osate-cli/packaging/scripts/verify-release-artifacts.sh
 
       # VERSION is an internal handoff to the formula generator, not an asset.
       - name: Create the GitHub release
@@ -246,13 +233,3 @@ jobs:
           fi
           git commit -m "osate-cli ${VERSION}"
           git push -u origin "$branch"
-
-  # The install test downloads the MSIs from the release, so it must come after it.
-  winget:
-    needs: [verify-version, publish]
-    if: github.ref_type == 'tag'
-    uses: ./.github/workflows/publish-winget.yml
-    with:
-      version: ${{ needs.verify-version.outputs.version }}
-    secrets:
-      WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}

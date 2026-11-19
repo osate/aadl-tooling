@@ -150,7 +150,7 @@ sha256_file() {
 artifact_sha256() {
 	local sums_file=$1
 	local artifact_name=$2
-	# Tolerate CRLF so a checksum file written on Windows cannot hide its entries.
+	# Accept CRLF line endings in checksum files.
 	awk -v artifact="$artifact_name" '{ sub(/\r$/, "") } $2 == artifact { print $1 }' "$sums_file"
 }
 
@@ -170,9 +170,6 @@ target_platform() {
 		linux-x64 | linux-arm64)
 			printf '%s\n' "linux"
 			;;
-		windows-x64 | windows-arm64)
-			printf '%s\n' "windows"
-			;;
 		*)
 			die "unsupported target: $1"
 			;;
@@ -186,9 +183,6 @@ target_adoptium_os() {
 			;;
 		linux-*)
 			printf '%s\n' "linux"
-			;;
-		windows-*)
-			printf '%s\n' "windows"
 			;;
 		*)
 			die "unsupported target: $1"
@@ -228,9 +222,6 @@ artifact_extension() {
 	case "$1" in
 		macos-* | linux-*)
 			printf '%s\n' "tar.gz"
-			;;
-		windows-*)
-			printf '%s\n' "zip"
 			;;
 		*)
 			die "unsupported target: $1"

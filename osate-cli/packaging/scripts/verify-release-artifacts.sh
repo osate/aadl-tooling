@@ -25,7 +25,6 @@ script_dir=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=common.sh
 source "$script_dir/common.sh"
 artifacts_dir="$packaging_dir/target/artifacts"
-include_msi=true
 while [ $# -gt 0 ]; do
 	case "$1" in
 		--artifacts-dir)
@@ -33,20 +32,16 @@ while [ $# -gt 0 ]; do
 			artifacts_dir=$2
 			shift 2
 			;;
-		--without-msi) include_msi=false; shift ;;
 		*) die "unknown option: $1" ;;
 	esac
 done
 OSATE_CLI_VERSION=$(version_from_artifacts "$artifacts_dir")
 files=()
-for target in macos-x64 macos-arm64 linux-x64 linux-arm64 windows-x64 windows-arm64; do
+for target in macos-x64 macos-arm64 linux-x64 linux-arm64; do
 	files+=("$(artifact_filename "$target")")
 done
 files+=("osate-cli_${OSATE_CLI_VERSION}_amd64.deb" "osate-cli_${OSATE_CLI_VERSION}_arm64.deb"
 	"osate-cli-${OSATE_CLI_VERSION}-1.x86_64.rpm" "osate-cli-${OSATE_CLI_VERSION}-1.aarch64.rpm")
-if [ "$include_msi" = true ]; then
-	files+=("osate-cli-${OSATE_CLI_VERSION}-windows-x64.msi" "osate-cli-${OSATE_CLI_VERSION}-windows-arm64.msi")
-fi
 for file in "${files[@]}"; do
 	[ -s "$artifacts_dir/$file" ] || die "missing release artifact: $file"
 	expected=$(artifact_sha256 "$artifacts_dir/SHA256SUMS" "$file")
