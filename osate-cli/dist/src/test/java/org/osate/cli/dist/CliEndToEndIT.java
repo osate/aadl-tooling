@@ -42,7 +42,6 @@ import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
@@ -58,7 +57,6 @@ import org.junit.jupiter.api.io.TempDir;
 class CliEndToEndIT {
 
 	private static final Pattern DIAG_LINE = Pattern.compile("^.+:\\d+:\\d+: (error|warning|info|hint): .+$");
-	private static final boolean IS_WINDOWS = System.getProperty("os.name", "").toLowerCase(Locale.ROOT).contains("win");
 
 	static boolean isLauncherAvailable() {
 		var dir = System.getProperty("osate.cli.bin");
@@ -69,7 +67,7 @@ class CliEndToEndIT {
 	}
 
 	private static Path launcher(Path bin) {
-		return bin.resolve(IS_WINDOWS ? "osate-cli.bat" : "osate-cli");
+		return bin.resolve("osate-cli");
 	}
 
 	@Test

@@ -82,7 +82,7 @@ OSATE_CLI_SERVER_LAUNCH=bogus osate-cli c1 init "$WS"; echo "rc=$?"
 # OSATE_CLI_SERVER_LAUNCH must be one of auto, managed, direct: bogus
 ```
 
-In a Windows shell, headless Linux session without a systemd user manager, or another
+In a headless Linux session without a systemd user manager or another
 environment known not to have a supported manager:
 
 ```bash

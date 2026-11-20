@@ -29,6 +29,9 @@
 long-lived **workspace server** that embeds an AADL language server in-process; its local
 `project` commands manage Eclipse/OSATE `.project` files without contacting a server.
 
+Supported platforms are macOS and Linux (x64 and ARM64). Windows is currently
+unsupported.
+
 There is one workspace server per workspace; only one client is bound to a given workspace
 server at a time.
 
@@ -57,10 +60,10 @@ For implementation details (spawn lifecycle, classloader isolation, build-jar la
 | `managed` | Require the native user manager. Unavailability is fatal: `managed workspace-server launch unavailable: <reason>`. A failure after the manager accepts the launch is also fatal and never falls back to direct. |
 | `direct` | Start the JVM directly as a child of the `osate-cli` process without probing launchd or systemd. |
 
-Windows and other unsupported systems use direct mode under `auto`; `managed` fails there.
 Linux sessions without both `systemd-run` and `systemctl`, or without a reachable systemd user
-manager, behave the same way. Values are trimmed and case-insensitive; any value other than
-`auto`, `managed`, or `direct` is an argument-independent runtime error.
+manager, use direct mode under `auto`; `managed` fails there. Values are trimmed and
+case-insensitive; any value other than `auto`, `managed`, or `direct` is an
+argument-independent runtime error.
 
 Managed service identities are stable for a normalized first workspace root:
 `org.osate.cli.workspace.<24-hex-hash>` on launchd and
@@ -102,7 +105,7 @@ version, so it stays parseable; use `help` for the build provenance.
 The version is declared in exactly one place: the `<revision>` property of
 `osate-cli/pom.xml`. Maven filters it into `org/osate/cli/version.properties` inside
 `osate-cli.jar`, and the packaging scripts read it back out of that jar to version the
-release tarballs, Windows `.zip`/`.msi` packages, `.deb`, `.rpm`, and Homebrew formula. The version reported here is
+release tarballs, `.deb`, `.rpm`, and Homebrew formula. The version reported here is
 therefore always the version of the package the CLI was installed from.
 
 ### Build provenance
@@ -625,7 +628,7 @@ its current working directory when none was specified on the command line.
 
 Three Maven modules live under the `osate-cli/` directory: `osate-workspace-server`
 (long-lived server), `osate-cli` (client), and `dist`, which assembles the runnable layout
-(`bin/osate-cli{,.bat}`, `osate-cli.jar`, `lib/osate-workspace-server-*.jar`).
+(`bin/osate-cli`, `osate-cli.jar`, `lib/osate-workspace-server-*.jar`).
 
 The workspace-server build depends on the Tycho output of `../aadl-language-server`. Run that
 once first:

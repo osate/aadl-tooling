@@ -32,6 +32,9 @@ that embeds the AADL language server in-process, so repeated commands against
 the same workspace reuse a warm model index. Local `project` commands manage
 `.project` files directly and contact no server.
 
+Supported platforms are macOS and Linux (x64 and ARM64). Windows is currently
+unsupported.
+
 ## Documentation
 
 - [**OSATE-CLI.md**](OSATE-CLI.md) — the command reference and behavioral
@@ -40,8 +43,7 @@ the same workspace reuse a warm model index. Local `project` commands manage
 - [AGENTS.md](AGENTS.md) — development guide: module layout, build and test
   commands, runtime invariants, and the change checklist.
 - [packaging/README.md](packaging/README.md) — release archives, `.deb`/`.rpm`
-  packages, Windows ZIPs/MSIs, Homebrew formula, WinGet manifests, and release
-  publication.
+  packages, Homebrew formula, and release publication.
 - [osate-cli/manual-test.md](osate-cli/manual-test.md) — the manual test plan
   for behavior that automated tests cannot cover.
 
@@ -52,8 +54,7 @@ the same workspace reuse a warm model index. Local `project` commands manage
   shaded, because Xtext resource loading requires on-disk `file:` URLs.
 - `dist/` — the assembled runnable layout: launcher, client JAR,
   workspace-server JAR, and language-server plug-ins.
-- `packaging/` — release archives, native packages, and Homebrew and WinGet
-  metadata.
+- `packaging/` — release archives, native packages, and Homebrew metadata.
 
 ## Build
 
